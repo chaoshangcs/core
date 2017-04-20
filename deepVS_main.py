@@ -1,8 +1,8 @@
 import time,os
 import tensorflow as tf
 import numpy as np
-from deepVS_input import index_the_database_into_queue,data_and_label_queue
-from deepVS_net import deepVS_net
+from deepVS_input import index_the_database_into_queue,data_and_label_queue, read_receptor_and_ligand
+from deepVS_net import *
 
 # telling tensorflow how we want to randomly initialize weights
 
@@ -20,14 +20,16 @@ def train():
     epoch_counter = tf.div(batch_counter*FLAGS.batch_size,examples_in_database)
 
     # create a custom shuffle queue
-    _,current_epoch,label_batch,ligand_atoms, ligand_coords = data_and_label_queue(batch_size=FLAGS.batch_size, pixel_size=FLAGS.pixel_size,
-                                                                          side_pixels=FLAGS.side_pixels, num_threads=FLAGS.num_threads,
-                                                                          filename_queue=filename_queue, epoch_counter=epoch_counter)
+    #_,current_epoch,label_batch,ligand_atoms, ligand_coords = data_and_label_queue(batch_size=FLAGS.batch_size, pixel_size=FLAGS.pixel_size, side_pixels=FLAGS.side_pixels, num_threads=FLAGS.num_threads, filename_queue=filename_queue, epoch_counter=epoch_counter)
 
     keep_prob = tf.placeholder(tf.float32)
 
-    predicted_labels = deepVS_net(ligand_atoms, ligand_coords, keep_prob)
+    input_z = tf.placeholder(tf.int32, shape=[None, k_c, 2], name='z')
+    transposed_input = tf.transpose(input_z, perm=[1,2,0], name='transposed_input')
 
+    predicted_labels = deepVS_net(transposed_input, keep_prob)
+    
+    """
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=predicted_labels,labels=label_batch)
     cross_entropy_mean = tf.reduce_mean(cross_entropy)
     tf.summary.scalar('cross entropy mean', cross_entropy_mean)
@@ -43,6 +45,7 @@ def train():
     # merge all summaries and create a file writer object
     merged_summaries = tf.summary.merge_all()
     train_writer = tf.summary.FileWriter((FLAGS.summaries_dir + '/' + str(FLAGS.run_index) + "_train"), sess.graph)
+    """
 
     # create saver to save and load the network state
     saver = tf.train.Saver()
@@ -51,7 +54,6 @@ def train():
     else:
         print "Restoring variables from sleep. This may take a while..."
         saver.restore(sess,FLAGS.saved_session)
-
 
     # launch all threads only after the graph is complete and all the variables initialized
     # previously, there was a hard to find occasional problem where the computations would start on unfinished nodes
@@ -62,7 +64,17 @@ def train():
     while True:
         start = time.time()
         batch_num = sess.run(batch_counter_increment)
-        epo,c_entropy_mean,_ = sess.run([current_epoch,cross_entropy_mean,train_step_run], feed_dict={keep_prob: 0.5})
+
+        #creating the input tensor
+        ligand_file,current_epoch,label,ligand_atoms,ligand_coords,receptor_elements,receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter,train=train)
+        ligand_atoms, ligand_coords = sess.run([ligand_atoms, ligand_coords])
+        #this gives us a python list of dimensions [m * kc * 2]
+        in_z = construct_z(ligand_atoms, ligand_coords)
+        t_input = sess.run(predicted_labels, feed_dict={keep_prob:0.5, input_z:in_z})
+        print(t_input)
+
+        """
+        epo,c_entropy_mean,_ = sess.run([current_epoch,cross_entropy_mean,train_step_run], feed_dict={keep_prob: 0.5, z: z})
         print "epoch:",epo[0],"global step:", batch_num, "\tcross entropy mean:", c_entropy_mean,
 
         print "\texamples per second:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
@@ -76,7 +88,7 @@ def train():
             saver.save(sess, FLAGS.summaries_dir + '/' + str(FLAGS.run_index) + "_netstate/saved_state", global_step=batch_num)
 
     assert not np.isnan(cross_entropy_mean), 'Model diverged with loss = NaN'
-
+    """
 
 class FLAGS:
     """important model parameters"""
