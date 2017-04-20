@@ -180,24 +180,28 @@ class SearchAgent:
 
         # enqueue data into the
         self._tforms_and_cameraviews_queue = tf.FIFOQueue(capacity=80000, dtypes=[tf.float32,tf.float32],shapes=[[4,4],[4,4]])
-        r_tform,r_cameraview = self._tforms_and_cameraviews_queue.dequeue()
+        self.r_tform,self.r_cameraview = self._tforms_and_cameraviews_queue.dequeue()
 
-        r_tformed_lig_coords,_ = av4_utils.affine_transform(self.lig_coords, self._affine_tforms_queue.dequeue())
-        av4_utils.affine_transform(self.lig_coords, self._affine_tforms_queue.dequeue())
+        self.r_tformed_lig_coords,_ = av4_utils.affine_transform(self.lig_coords, self.r_tform)
+
         # Regenerator to convert coordinates of the protein and ligand into an image
-        r_complex_image,_,_ = av4_input.convert_protein_and_ligand_to_image(self.lig_elements,
-                                                                                   r_tformed_lig_coords,
+        self.r_complex_image,_,_ = av4_input.convert_protein_and_ligand_to_image(self.lig_elements,
+                                                                                   self.r_tformed_lig_coords,
                                                                                    self.rec_elements,
                                                                                    self.rec_coords,
                                                                                    side_pixels,
                                                                                    pixel_size,
-                                                                                   r_cameraview)
-        # Regenerator to calculate Root Mean Square Deviation
-        r_lig_RMSD = tf.reduce_mean(tf.square(r_tformed_lig_coords - self.lig_coords))**0.5
-        self.r_image_queue_enqueue = self.image_queue.enqueue([r_complex_image,r_tform,r_cameraview,r_lig_RMSD])
+                                                                                   self.r_cameraview)
 
-        # downstream
-#        sess.run(self._tforms_and_cameraviews_queue.enqueue_many()
+
+        # Regenerator to calculate Root Mean Square Deviation
+        self.r_lig_RMSD = tf.reduce_mean(tf.square(self.r_tformed_lig_coords - self.lig_coords))**0.5
+        self.r_image_queue_enqueue = self.image_queue.enqueue([self.r_complex_image,self.r_tform,self.r_cameraview,self.r_lig_RMSD])
+        self.r_queue_runner = av4_utils.QueueRunner(self.image_queue, [self.r_image_queue_enqueue] * num_threads)
+
+        #self.image_batch, self.lig_pose_tform_batch, self.cameraview_batch, self.lig_RMSD_batch = self.image_queue.dequeue_many(220)
+
+
 
 
     def grid_evaluate_positions(self,my_lig_elements,my_lig_coords,my_rec_elements,my_rec_coords):
@@ -270,6 +274,9 @@ class SearchAgent:
             self.coord.request_stop()
             self.coord.join()
             self.coord.clear_stop()
+
+
+
             # remove all affine transform matrices from the queue to be empty before the next protein/ligand
             try:
                 while True:
@@ -285,8 +292,69 @@ class SearchAgent:
             except tf.errors.DeadlineExceededError:
                 print "image queue size:", self.sess.run(self.image_queue.size())
 
-            # use the same queue to generate a batch of images
+            # regenerate a batch of images
+            # enqueue the REGENERATOR
+            self.sess.run(self._tforms_and_cameraviews_queue.enqueue_many([sel_lig_pose_transforms,sel_cameraviews]))
+            # dequeue a single batch of regenerated images
 
+            # start threads to fill the REGENERATOR queue
+            self.r_enqueue_threads = self.r_queue_runner.create_threads(self.sess, coord=self.coord, start=False, daemon=True)
+            # start threads to fill the queue
+
+
+            # TEST
+            print self.sess.run(self.r_tform)
+            print self.sess.run(self.r_cameraview)
+
+            print self.sess.run(self.r_tformed_lig_coords)
+
+            print self.sess.run(self.r_complex_image)
+
+
+
+
+
+
+            print " regeneration queue print queue size -3:", self.sess.run(self.image_queue.size())
+            print self.sess.run(self._tforms_and_cameraviews_queue.size())
+            for tr in self.r_enqueue_threads:
+                print tf
+                tr.start()
+            time.sleep(0.3)
+            print "regeneration queue print queue size -2:", self.sess.run(self.image_queue.size())
+            print self.sess.run(self._tforms_and_cameraviews_queue.size())
+            time.sleep(0.3)
+            print "regeneration queue print queue size -1:", self.sess.run(self.image_queue.size())
+            print self.sess.run(self._tforms_and_cameraviews_queue.size())
+            time.sleep(0.3)
+            print "dequeue the regenerator batch ~!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+            # dequeue the REGENERATOR batch
+            my_r_image_batch = self.sess.run([self.image_batch],
+                                             feed_dict={self.keep_prob: 1}, options=tf.RunOptions(timeout_in_ms=1000))
+
+            print my_r_image_batch
+
+            # accurately terminate all threads without closing the queue (uses custom QueueRunner class)
+            self.sess.run(self._tforms_and_cameraviews_queue.enqueue_many([av4_utils.generate_identity_matrices(self.num_threads*3),av4_utils.generate_identity_matrices(self.num_threads*3)]))
+            self.coord.request_stop()
+            self.coord.join()
+            self.coord.clear_stop()
+
+            # remove all affine transform matrices from the queue to be empty before the next protein/ligand
+            try:
+                while True:
+                    print ".",
+                    self.sess.run(self._tforms_and_cameraviews_queue.dequeue(),options=tf.RunOptions(timeout_in_ms=500))
+            except tf.errors.DeadlineExceededError:
+                print "affine transform queue size:", self.sess.run(self._affine_tforms_queue.size())
+            # remove all images from the image queue to be empty before the next protein/ligand
+            try:
+                while True:
+                    print ".",
+                    self.sess.run(self.image_queue.dequeue(),options=tf.RunOptions(timeout_in_ms=500))
+            except tf.errors.DeadlineExceededError:
+                print "image queue size:", self.sess.run(self.image_queue.size())
 
 
         return 0
