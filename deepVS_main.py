@@ -22,12 +22,11 @@ def train():
     # create a custom shuffle queue
     #_,current_epoch,label_batch,ligand_atoms, ligand_coords = data_and_label_queue(batch_size=FLAGS.batch_size, pixel_size=FLAGS.pixel_size, side_pixels=FLAGS.side_pixels, num_threads=FLAGS.num_threads, filename_queue=filename_queue, epoch_counter=epoch_counter)
 
+    ligand_file,current_epoch,label,ligand_atoms,ligand_coords,receptor_elements,receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter,train=train)
+
     keep_prob = tf.placeholder(tf.float32)
 
-    input_z = tf.placeholder(tf.int32, shape=[None, k_c, 2], name='z')
-    transposed_input = tf.transpose(input_z, perm=[1,2,0], name='transposed_input')
-
-    predicted_labels = deepVS_net(transposed_input, keep_prob)
+    predicted_labels = deepVS_net(ligand_atoms, ligand_coords, keep_prob)
     
     """
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=predicted_labels,labels=label_batch)
@@ -65,13 +64,8 @@ def train():
         start = time.time()
         batch_num = sess.run(batch_counter_increment)
 
-        #creating the input tensor
-        ligand_file,current_epoch,label,ligand_atoms,ligand_coords,receptor_elements,receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter,train=train)
-        ligand_atoms, ligand_coords = sess.run([ligand_atoms, ligand_coords])
-        #this gives us a python list of dimensions [m * kc * 2]
-        in_z = construct_z(ligand_atoms, ligand_coords)
-        t_input = sess.run(predicted_labels, feed_dict={keep_prob:0.5, input_z:in_z})
-        print(t_input)
+        output_labels = sess.run(predicted_labels, feed_dict={keep_prob:0.5})
+        print(output_labels)
 
         """
         epo,c_entropy_mean,_ = sess.run([current_epoch,cross_entropy_mean,train_step_run], feed_dict={keep_prob: 0.5, z: z})
