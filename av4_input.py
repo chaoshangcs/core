@@ -3,6 +3,12 @@ from glob import glob
 import os,time
 from av4_utils import generate_deep_affine_transform,affine_transform
 
+
+
+# TODO !!! A way to skip the protein to the empty screen
+# TODO: Also, the current pipeline does not support ligands that are too big
+
+
 def index_the_database_into_queue(database_path,shuffle):
     """Indexes av4 database and returns two lists of filesystem path: ligand files, and protein files.
     Ligands are assumed to end with _ligand.av4, proteins should be in the same folders with ligands.
@@ -80,32 +86,34 @@ def read_receptor_and_ligand(filename_queue,epoch_counter):
     ligand_labels, ligand_elements, multiframe_ligand_coords = decode_av4(serialized_ligand)
     receptor_labels, receptor_elements, multiframe_receptor_coords = decode_av4(serialized_receptor)
 
-    def count_frame_from_epoch(epoch_counter,ligand_labels):
-        """Some simple arithmetics is used to sample all of the available frames
-        if the index of the examle is even, positive label is taken every even epoch
-        if the index of the example is odd, positive label is taken every odd epoch
-        current negative example increments once every two epochs, and slides along all of the negative examples"""
+#    def count_frame_from_epoch(epoch_counter,ligand_labels):
+#        """Some simple arithmetics is used to sample all of the available frames
+#        if the index of the examle is even, positive label is taken every even epoch
+#        if the index of the example is odd, positive label is taken every odd epoch
+#        current negative example increments once every two epochs, and slides along all of the negative examples"""
+#
+#        def select_pos_frame(): return tf.constant(0)
+#        def select_neg_frame(): return tf.mod(tf.div(1+epoch_counter,2), tf.shape(ligand_labels) - 1) +1
+#        current_frame = tf.cond(tf.equal(tf.mod(epoch_counter+idx+1,2),1),select_pos_frame,select_neg_frame)
+#        return tf.mod(epoch_counter,tf.shape(ligand_labels))
+#
+#    current_frame = count_frame_from_epoch(epoch_counter,ligand_labels)
 
-        def select_pos_frame(): return tf.constant(0)
-        def select_neg_frame(): return tf.mod(tf.div(1+epoch_counter,2), tf.shape(ligand_labels) - 1) +1
-        current_frame = tf.cond(tf.equal(tf.mod(epoch_counter+idx+1,2),1),select_pos_frame,select_neg_frame)
-        return tf.mod(epoch_counter,tf.shape(ligand_labels))
-
-    current_frame = count_frame_from_epoch(epoch_counter,ligand_labels)
+    current_frame = tf.constant(0)
     ligand_coords = tf.gather(tf.transpose(multiframe_ligand_coords, perm=[2, 0, 1]),current_frame)
     label = tf.gather(ligand_labels,current_frame)
 
     return ligand_file,tf.squeeze(epoch_counter),tf.squeeze(label),ligand_elements,tf.squeeze(ligand_coords),receptor_elements,tf.squeeze(multiframe_receptor_coords)
 
 
-def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size):
+def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size,cameraview=None):
     """Take coordinates and elements of protein and ligand and convert them into an image.
     Return image with one dimension so far."""
 
     # FIXME abandon ligand when it does not fit into the box (it's kept now)
 
     # max_num_attempts - maximum number of affine transforms for the ligand to be tried
-    max_num_attemts = 1000
+    max_num_attemts = 50000
     # affine_transform_pool_size is the first(batch) dimension of tensor of transition matrices to be returned
     # affine tranform pool is only generated once in the beginning of training and randomly sampled afterwards
     affine_transform_pool_size = 10000
@@ -134,7 +142,11 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
 
     attempt = tf.Variable(tf.constant(0, shape=[1]))
     random_cameraviews = tf.Variable(generate_deep_affine_transform(affine_transform_pool_size))
-    cameraview = tf.gather(random_cameraviews, tf.random_uniform([], minval=0, maxval=affine_transform_pool_size, dtype=tf.int64))
+
+    if cameraview is None:
+        cameraview = tf.gather(random_cameraviews, tf.random_uniform([], minval=0, maxval=affine_transform_pool_size, dtype=tf.int64))
+    else:
+        cameraview = cameraview
 
     last_attempt,final_cameraview,_ = tf.while_loop(not_all_in_the_box, generate_transition_matrix, [attempt,cameraview,random_cameraviews],parallel_iterations=1)
 

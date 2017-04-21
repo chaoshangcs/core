@@ -13,38 +13,38 @@ FLAGS.num_epochs = 2
 FLAGS.top_k = FLAGS.num_epochs
 
 
-minimizer1 = av4_conformation_sampler.SearchAgent()
+search_agent1 = av4_conformation_sampler.SearchAgent()
 
 
 def evaluate_on_train_set():
     "train a network"
 
-    with tf.name_scope("epoch_counter"):
-        batch_counter = tf.Variable(0)
-        batch_counter_increment = tf.assign(batch_counter,tf.Variable(0).count_up_to(np.round((100000*FLAGS.num_epochs)/FLAGS.batch_size)))
-        epoch_counter = tf.div(batch_counter*FLAGS.batch_size,1000000)
-
-
     # create session to compute evaluation
     sess = FLAGS.main_session
 
     # create a filename queue first
-    filename_queue,examples_in_database = av4_input.index_the_database_into_queue(FLAGS.database_path, shuffle=True)
+    filename_queue,ex_in_database = av4_input.index_the_database_into_queue(FLAGS.database_path, shuffle=True)
 
-    # create an epoch counter
-    # there is an additional step with variable initialization in order to get the name of "count up to" in the graph
-    batch_counter = tf.Variable(0,trainable=False)
+    with tf.name_scope("epoch_counter"):
+        "create an epoch counter"
+        counter = tf.Variable(0)
+        counter_incr = tf.assign(counter,tf.Variable(0).count_up_to(np.round(ex_in_database*FLAGS.num_epochs)))
+        e_counter = tf.div(counter_incr,ex_in_database)
 
-    # read one receptor and stack of ligands; choose one of the ligands from the stack according to epoch
-    ligand_file,current_epoch,label,ligand_elements,ligand_coords,receptor_elements,receptor_coords = av4_input.read_receptor_and_ligand(filename_queue,epoch_counter=tf.constant(0))
+    # read receptor and ligand from the queue
+    lig_file,_,_,lig_elements,lig_coords,rec_elements,rec_coords = av4_input.read_receptor_and_ligand(
+        filename_queue=filename_queue,epoch_counter=tf.constant(0))
+
+
+    # create a very large queue of images for central parameter server
+    
+
 
     # create saver to save and load the network state
-
     sess.run(tf.global_variables_initializer())
-    saver= tf.train.Saver(var_list=(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="Adam_optimizer")
-                                    + tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="network")
-                                    + tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="epoch_counter")))
-
+    saver = tf.train.Saver(var_list=(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="Adam_optimizer")
+                                    + tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="network")))
+                                    #+ tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="epoch_counter")))
 
     if FLAGS.saved_session is None:
         sess.run(tf.global_variables_initializer())
@@ -53,39 +53,21 @@ def evaluate_on_train_set():
         print "Restoring variables from sleep. This may take a while..."
         saver.restore(sess,FLAGS.saved_session)
         print "unitialized vars:", sess.run(tf.report_uninitialized_variables())
-        time.sleep(1)
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess = sess,coord=coord)
-
-    batch_num = 0
 
 
     while True or not coord.should_stop():
         start = time.time()
 
-        print "print taking next ligand:", sess.run(ligand_file)
-        my_ligand_file,my_current_epoch,my_label,my_ligand_elements,my_ligand_coords,my_receptor_elements,my_receptor_coords = \
-            sess.run([ligand_file,current_epoch,label,ligand_elements,ligand_coords,receptor_elements,receptor_coords])
+        my_epoch,my_lig_file,my_lig_elements,my_lig_coords,my_rec_elements,my_rec_coords = \
+            sess.run([e_counter,lig_file,lig_elements,lig_coords,rec_elements,rec_coords])
 
-        print "obtained coordinates trying to minimize the ligand "
-        print "ligand elements:", len(my_ligand_elements)
-        print "ligand coords", len(my_ligand_coords[:,0])
-        print "receptor element:", len(my_receptor_elements)
-        print "receptor coords:", len(my_receptor_coords[:,0])
-        minimizer1.grid_evaluate_positions(my_ligand_elements,my_ligand_coords,my_receptor_elements,my_receptor_coords)
-        #minimizer1.grid_evaluate_positions(np.array([0]),np.array([[0,0,0]]), my_receptor_elements,
-        #                                   my_receptor_coords)
+        search_agent1.grid_evaluate_positions(my_lig_elements,my_lig_coords,my_rec_elements,my_rec_coords)
 
-
-        # minimizer should return many images
-        # for simplicity of visualization of what is going on, the images will be in python (and for error notifications)
-        # images can be enqueud into the main queue
-
-
-
-        print "batch_num:",batch_num
-        print "\texamples per second:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
+        print "epoch:", my_epoch,"\t",my_lig_file.split("/")[-1],
+        print "\tpositional search took :", "%.2f" % (time.time() - start), "seconds."
 
 
 evaluate_on_train_set()
