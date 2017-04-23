@@ -128,6 +128,7 @@ class FLAGS:
     # main session for multiagent training
     main_session = tf.Session()
 
+    ex_in_database=None
 
 def main(_):
     """gracefully creates directories for the log files and for the network state launches. After that orders network training to start."""

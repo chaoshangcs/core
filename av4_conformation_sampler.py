@@ -76,7 +76,7 @@ class SearchAgent:
             """ Adds batch of predictions for different positions and cameraviews of the ligand.
             """
             self.preds = np.append(self.preds, pred_batch, axis=0)
-            self.costs = np.append(self.costs,cost_batch,axis=0)
+            self.costs = np.append(self.costs,cost_batch, axis=0)
             self.lig_pose_transforms = np.append(self.lig_pose_transforms, lig_pose_transform_batch, axis=0)
             self.cameraviews = np.append(self.cameraviews, cameraview_batch, axis=0)
             self.lig_RMSDs = np.append(self.lig_RMSDs, lig_RMSD_batch, axis=0)
@@ -211,8 +211,9 @@ class SearchAgent:
                        tf.assign(self.rec_elements,my_rec_elements, validate_shape=False, use_locking=True),
                        tf.assign(self.rec_coords,my_rec_coords, validate_shape=False, use_locking=True)])
 
+
         # re-initialize the evalutions class
-        self.evaluated = self.EvaluationsContainer()
+        evaluated = self.EvaluationsContainer()
 
         print "shapes of the ligand and protein:"
         print self.sess.run([tf.shape(self.lig_elements),
@@ -237,7 +238,7 @@ class SearchAgent:
                                   feed_dict = {self.keep_prob:1},
                                   options=tf.RunOptions(timeout_in_ms=1000))
                 # save the predictions and cameraviews from the batch into evaluations container
-                lig_poses_evaluated = self.evaluated.add_batch(my_pred_batch,
+                lig_poses_evaluated = evaluated.add_batch(my_pred_batch,
                                                                my_cost_batch,
                                                                my_lig_pose_tform_batch,
                                                                my_cameraview_batch,
@@ -249,7 +250,7 @@ class SearchAgent:
 
         except tf.errors.DeadlineExceededError:
             # create training examples for the main queue
-            sel_lig_pose_transforms,sel_cameraviews = self.evaluated.convert_into_training_batch(
+            sel_lig_pose_transforms,sel_cameraviews = evaluated.convert_into_training_batch(
                 cameraviews_initial_pose=20,generated_poses=200,remember_poses=300)
 
             # accurately terminate all threads without closing the queue (uses custom QueueRunner class)

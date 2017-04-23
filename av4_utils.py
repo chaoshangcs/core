@@ -11,7 +11,7 @@ from tensorflow.python.platform import tf_logging as logging
 
 import tensorflow as tf
 import numpy as np
-
+import time
 
 # generate one very large tensor
 # take slices from that tensor
@@ -647,6 +647,8 @@ class QueueRunner(object):
     if coord:
       ret_threads.append(threading.Thread(target=self._close_on_stop,
                                           args=(sess, self._cancel_op, coord)))
+
+    started_threads = 0
     for t in ret_threads:
       if coord:
         coord.register_thread(t)
@@ -654,6 +656,12 @@ class QueueRunner(object):
         t.daemon = True
       if start:
         t.start()
+        print "[thread_start:",started_threads,"]",
+        started_threads+=1
+
+    time.sleep(0.25)
+    print "[all threads started. queue.size:",sess.run(self.queue.size()),"]"
+
     return ret_threads
 
   def to_proto(self, export_scope=None):
@@ -693,4 +701,10 @@ class QueueRunner(object):
 
 
 
-# TODO: (maksym) Queue runner invokes a nasty future print function that has better to be substituted
+def dequeue_all(sess,queue):
+    try:
+        while True:
+            print ".",
+            sess.run(queue.dequeue(), options=tf.RunOptions(timeout_in_ms=500))
+    except tf.errors.DeadlineExceededError:
+        print "[",sess.run(queue.size()), "]"
