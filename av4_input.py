@@ -10,9 +10,10 @@ from av4_utils import generate_deep_affine_transform,affine_transform
 
 
 def index_the_database_into_queue(database_path,shuffle):
-    """Indexes av4 database and returns two lists of filesystem path: ligand files, and protein files.
+    """ Indexes av4 database and returns two lists of filesystem path: ligand files, and protein files.
     Ligands are assumed to end with _ligand.av4, proteins should be in the same folders with ligands.
-    Each protein should have its own folder named similarly to the protein name (in the PDB)."""
+    Each protein should have its own folder named similarly to the protein name (in the PDB).
+    """
     # TODO controls epochs here
     ligand_file_list = []
     receptor_file_list = []
@@ -46,6 +47,8 @@ def index_the_database_into_queue(database_path,shuffle):
 
     filename_queue = tf.train.slice_input_producer([index_tensor,ligand_files,receptor_files],num_epochs=None,shuffle=shuffle)
     return filename_queue,examples_in_database
+
+
 
 
 def read_receptor_and_ligand(filename_queue,epoch_counter):
@@ -222,5 +225,22 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
     #return centered_ligand_coords,ordered_sparse_complex.indices,ligand_center_of_mass,final_transition_matrix
     #return complex_image,ligand_coords_noh,tf.constant(0),sorted_bond
 
-def image_and_label_queue():
-    pass
+#def image_and_label_queue():
+#    pass
+
+def image_and_label_queue(batch_size,pixel_size,side_pixels,num_threads,filename_queue,epoch_counter):
+    """Creates shuffle queue for training the network"""
+
+    # read one receptor and stack of ligands; choose one of the ligands from the stack according to epoch
+    ligand_file,current_epoch,label,ligand_elements,ligand_coords,receptor_elements,receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter)
+
+    # convert coordinates of ligand and protein into an image
+    #sparse_image_4d,_,_ = convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size)
+    complex_image,_,_ = convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size)
+
+    # create a batch of proteins and ligands to read them together
+    multithread_batch = tf.train.batch([ligand_file,current_epoch, label,complex_image], batch_size, num_threads=num_threads,
+                                       capacity=batch_size * 3,dynamic_pad=True,shapes=[[],[], [], [20,20,20]])
+
+    return multithread_batch
+

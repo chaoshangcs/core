@@ -35,31 +35,31 @@ class GradientDescendMachine:
         # create a very large queue of images for central parameter server
 
 
-
         # create a way to evaluate these images with the network
-        x = av4_conformation_sampler.SearchAgent()
-
 
         # create saver to save and load the network state
+#        self.sess.run(tf.global_variables_initializer())
+#        saver = tf.train.Saver(var_list=(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="Adam_optimizer")
+#                                         + tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="network")))
+#                                         #+ tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="epoch_counter")))
+#
+#        if FLAGS.saved_session is None:
+#            self.sess.run(tf.global_variables_initializer())
+#        else:
+#            self.sess.run(tf.global_variables_initializer())
+#            print "Restoring variables from sleep. This may take a while..."
+#            saver.restore(self.sess,FLAGS.saved_session)
+#            print "unitialized vars:", self.sess.run(tf.report_uninitialized_variables())
+
+        self.ag1 = av4_conformation_sampler.SearchAgent("AG1")
+        self.ag2 = av4_conformation_sampler.SearchAgent("AG2")
+
         self.sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver(var_list=(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="Adam_optimizer")
-                                        + tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="network")))
-                                        #+ tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="epoch_counter")))
-
-        if FLAGS.saved_session is None:
-            self.sess.run(tf.global_variables_initializer())
-        else:
-            self.sess.run(tf.global_variables_initializer())
-            print "Restoring variables from sleep. This may take a while..."
-            saver.restore(self.sess,FLAGS.saved_session)
-            print "unitialized vars:", self.sess.run(tf.report_uninitialized_variables())
-
-
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess = self.sess,coord=coord)
 
 
-    def do_sampling(self,sample_epochs=None):
+    def do_sampling(self, sample_epochs=None):
         """ COntrols all of the sampling by multiple agents
         """
         self.run_samples = None
@@ -67,12 +67,18 @@ class GradientDescendMachine:
         if sample_epochs is not None:
             self.run_samples = self.ex_in_database * sample_epochs
 
+        def lig_rec_elems_coords():
+            " Takes elements and coordinates from the next receptor and ligand"
+            my_lig_file, my_lig_elements, my_lig_coords, my_rec_elements, my_rec_coords = self.sess.run(
+                [self.lig_file, self.lig_elements, self.lig_coords, self.rec_elements, self.rec_coords])
+            print "ligand file runs for sampling:", my_lig_file
+            return my_lig_elements, my_lig_coords, my_rec_elements, my_rec_coords
+
         def pose_samplers_stop():
             if (sample_epochs is None) and (self.run_samples is None):
                 return False
             elif (sample_epochs is not None) and (self.run_samples > 0):
                 self.run_samples = self.run_samples - 1
-                print "run because run samples",self.run_samples
                 return False
             elif (sample_epochs is not None) and (self.run_samples <= 0):
                 return True
@@ -82,37 +88,39 @@ class GradientDescendMachine:
         def search_agent_1():
             # with TF. device GPU1
             # create an instance of a search agent that will run on this GPU
-            ag = av4_conformation_sampler.SearchAgent()
             while not pose_samplers_stop():
-                print "agent 1 works"
                 # def grid_evaluate_positions(self, my_lig_elements, my_lig_coords, my_rec_elements, my_rec_coords):
+                lig_elems, lig_coords, rec_elems, rec_coords = lig_rec_elems_coords()
+                self.ag1.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
 
         def search_agent_2():
-            # with TF. device GPU1
+            # with TF. device GPU2
             # create an instance of a search agent that will run on this GPU
-            ag = av4_conformation_sampler.SearchAgent()
             while not pose_samplers_stop():
-                print "agent 2 works"
+                lig_elems, lig_coords, rec_elems, rec_coords = lig_rec_elems_coords()
+                self.ag2.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
 
-        # start_threads
-
+        # start threads for conformation sampling
         t1 = threading.Thread(target=search_agent_1).start()
         t2 = threading.Thread(target=search_agent_2).start()
 
 
 
 
-class TrainingController:
-    def __init__(self):
-        for i in range(100):
-            print "doing training"
 
 
+#Class TrainingController:
+#    def __init__(self):
+#        for i in range(100):
+#            print "doing training"
 
+
+#coord = tf.train.Coordinator()
+#threads = tf.train.start_queue_runners(sess =FLAGS.main_session,coord=coord)
 
 a = GradientDescendMachine()
 a.do_sampling(sample_epochs=1)
 
-search_agent1 = av4_conformation_sampler.SearchAgent()
+#search_agent1 = av4_conformation_sampler.SearchAgent()
 
 print "All Done"
