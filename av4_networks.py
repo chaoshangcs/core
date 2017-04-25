@@ -83,6 +83,7 @@ def fc_layer(layer_name,input_tensor,output_dim):
     return h_fc
 
 
+
 def max_net(x_image_batch,keep_prob,batch_size):
     "makes a simple network that can receive 20x20x20 input images. And output 2 classes"
     with tf.name_scope('input'):
@@ -129,3 +130,64 @@ def max_net(x_image_batch,keep_prob,batch_size):
     y_conv = fc_layer(layer_name="out_neuron", input_tensor=h_fc2_relu, output_dim=2)
 
     return y_conv
+
+
+
+
+class Network:
+    def __init__(self):
+        self.w1 = weight_variable([5, 5, 5, 1, 20])
+        self.w2 = weight_variable([3, 3, 3, 20, 30])
+        self.w3 = weight_variable([2, 2, 2, 30, 40])
+        self.w4 = weight_variable([2, 2, 2, 40, 50])
+        self.w5 = weight_variable([2, 2, 2, 50, 60])
+
+        self.b1 = bias_variable([20])
+        self.b2 = bias_variable([30])
+        self.b3 = bias_variable([40])
+        self.b4 = bias_variable([50])
+        self.b5 = bias_variable([60])
+
+        self.fc1w = weight_variable([7500,1024])
+        self.fc1b = bias_variable([1024])
+        self.fc2w = weight_variable([1024,256])
+        self.fc2b = bias_variable([256])
+        self.fc3w = weight_variable([256,2])
+        self.fc3b = bias_variable([2])
+
+    def compute_output(self,image_batch,keep_prob):
+        x_image_batch = tf.reshape(image_batch, [100, 20, 20, 20, 1])
+
+        h_conv1 = tf.nn.conv3d(x_image_batch,self.w1, strides=[1,1,1,1,1], padding='SAME') + self.b1
+        h_relu1 = tf.nn.relu(h_conv1)
+        h_pool1 = tf.nn.max_pool3d(h_relu1,ksize=[1, 2, 2, 2, 1],strides=[1, 2, 2, 2, 1],padding='SAME')
+
+        h_conv2 = tf.nn.conv3d(h_pool1,self.w2, strides=[1,1,1,1,1], padding='SAME') + self.b2
+        h_relu2 = tf.nn.relu(h_conv2)
+        h_pool2 = tf.nn.max_pool3d(h_relu2, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
+
+        h_conv3 = tf.nn.conv3d(h_pool2, self.w3, strides=[1, 1, 1, 1, 1], padding='SAME') + self.b3
+        h_relu3 = tf.nn.relu(h_conv3)
+        h_pool3 = tf.nn.max_pool3d(h_relu3, ksize=[1, 1, 1, 1, 1], strides=[1, 1, 1, 1, 1], padding='SAME')
+
+        h_conv4 = tf.nn.conv3d(h_pool3, self.w4, strides=[1, 1, 1, 1, 1], padding='SAME') + self.b4
+        h_relu4 = tf.nn.relu(h_conv4)
+        h_pool4 = tf.nn.max_pool3d(h_relu4, ksize=[1, 1, 1, 1, 1], strides=[1, 1, 1, 1, 1], padding='SAME')
+
+        h_conv5 = tf.nn.conv3d(h_pool4, self.w5, strides=[1, 1, 1, 1, 1], padding='SAME') + self.b5
+        h_relu5 = tf.nn.relu(h_conv5)
+        h_pool5 = tf.nn.max_pool3d(h_relu5, ksize=[1, 1, 1, 1, 1], strides=[1, 1, 1, 1, 1], padding='SAME')
+
+        h_pool2_flat = tf.reshape(h_pool5, [-1, 5 * 5 * 5 * 60])
+        h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat,self.fc1w) + self.fc1b)
+        h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+        h_fc2 = tf.nn.relu(tf.matmul(h_fc1_drop, self.fc2w) + self.fc2b)
+        y_conv = tf.matmul(h_fc2, self.fc3w) + self.fc3b
+
+        return y_conv
+
+
+
+my_net = Network()
+
+
