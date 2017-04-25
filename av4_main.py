@@ -114,9 +114,9 @@ class FLAGS:
     # num_classes = 2
     # parameters to optimize runs on different machines for speed/performance
     # number of vectors(images) in one batch
-    batch_size = 2
+    batch_size = 100
     # number of background processes to fill the queue with images
-    num_threads = 256
+    num_threads = 8
     # data directories
 
     # path to the csv file with names of images selected for training

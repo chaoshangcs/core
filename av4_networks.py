@@ -1,4 +1,5 @@
 import tensorflow as tf
+import time
 
 # telling tensorflow how we want to randomly initialize weights
 def weight_variable(shape):
@@ -84,7 +85,7 @@ def fc_layer(layer_name,input_tensor,output_dim):
 
 
 
-def max_net(x_image_batch,keep_prob,batch_size):
+def old_max_net(x_image_batch,keep_prob,batch_size):
     "makes a simple network that can receive 20x20x20 input images. And output 2 classes"
     with tf.name_scope('input'):
         pass
@@ -134,7 +135,7 @@ def max_net(x_image_batch,keep_prob,batch_size):
 
 
 
-class Network:
+class MaxNet:
     def __init__(self):
         self.w1 = weight_variable([5, 5, 5, 1, 20])
         self.w2 = weight_variable([3, 3, 3, 20, 30])
@@ -155,8 +156,8 @@ class Network:
         self.fc3w = weight_variable([256,2])
         self.fc3b = bias_variable([2])
 
-    def compute_output(self,image_batch,keep_prob):
-        x_image_batch = tf.reshape(image_batch, [100, 20, 20, 20, 1])
+    def compute_output(self,image_batch,keep_prob,batch_size):
+        x_image_batch = tf.reshape(image_batch, [batch_size, 20, 20, 20, 1])
 
         h_conv1 = tf.nn.conv3d(x_image_batch,self.w1, strides=[1,1,1,1,1], padding='SAME') + self.b1
         h_relu1 = tf.nn.relu(h_conv1)
@@ -187,7 +188,4 @@ class Network:
         return y_conv
 
 
-
-my_net = Network()
-
-
+max_net = MaxNet()

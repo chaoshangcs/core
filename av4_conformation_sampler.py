@@ -133,13 +133,14 @@ class SearchAgent:
         # Generate a single ligand position from initial coordinates and a given transformation matrix.
         self.agent_name = agent_name
         self.sess = sess
-        self.num_threads = num_threads
+        self.coord = tf.train.Coordinator()
+        self.num_threads = num_threads                                                                                      # TODO - not sure if needed
+        self.identity_matrices = av4_utils.generate_identity_matrices(num_threads*3)
         self._affine_tforms_queue = tf.FIFOQueue(capacity=80000, dtypes=tf.float32,shapes=[4, 4])
 
         self.lig_pose_tforms = tf.concat([av4_utils.generate_identity_matrices(1000),
                                           av4_utils.generate_exhaustive_affine_transform()],
-                                         0)
-        self.identity_matrices = av4_utils.generate_identity_matrices(self.num_threads * 3)
+                                         0)                                                                                 # todo controls
 
         self.lig_elements = tf.Variable([0],trainable=False, validate_shape=False)
         self.lig_coords = tf.Variable([[0.0,0.0,0.0]], trainable=False, validate_shape=False)
@@ -160,17 +161,16 @@ class SearchAgent:
         lig_RMSD = tf.reduce_mean(tf.square(tformed_lig_coords - self.lig_coords))**0.5
 
         # create and enqueue images in many threads, and deque and score images in a main thread
-        self.coord = tf.train.Coordinator()
         self.image_queue = tf.FIFOQueue(capacity=batch_size*5,
-                                         dtypes=[tf.float32,tf.float32,tf.float32,tf.float32],
-                                         shapes=[[side_pixels,side_pixels,side_pixels], [4,4], [4,4], []])
+                                        dtypes=[tf.float32,tf.float32,tf.float32,tf.float32],
+                                        shapes=[[side_pixels,side_pixels,side_pixels], [4,4], [4,4], []])
 
-        self.image_queue_enqueue = self.image_queue.enqueue([complex_image, lig_pose_tform, cameraview, lig_RMSD])
-        self.queue_runner = av4_utils.QueueRunner(self.image_queue, [self.image_queue_enqueue]*num_threads)
-        self.image_batch,self.lig_pose_tform_batch, self.cameraview_batch,self.lig_RMSD_batch = self.image_queue.dequeue_many(batch_size)
+        self.image_queue_enq = self.image_queue.enqueue([complex_image, lig_pose_tform, cameraview, lig_RMSD])
+        self.queue_runner = av4_utils.QueueRunner(self.image_queue, [self.image_queue_enq]*num_threads)
+        self.image_batch, self.lig_pose_tform_batch, self.cameraview_batch, self.lig_RMSD_batch = self.image_queue.dequeue_many(batch_size)
         self.keep_prob = tf.placeholder(tf.float32)
         with tf.name_scope("network"):
-            y_conv = av4_networks.max_net(self.image_batch, self.keep_prob, batch_size)
+            y_conv = av4_networks.max_net.compute_output(self.image_batch, self.keep_prob, batch_size)
 
         # calculate both predictions, and costs for every ligand position in the batch
         self.pred_batch = tf.nn.softmax(y_conv)[:,1]
@@ -182,13 +182,13 @@ class SearchAgent:
         # Double pipeline allows to store only transformation matrices instead of images - needs less memory.
 
         # REGENERATOR: create queue and enque pipe with two placeholders
-        self._tforms_and_cameraviews_queue = tf.FIFOQueue(capacity=80000, dtypes=[tf.float32,tf.float32],shapes=[[4,4],[4,4]])
+        self._r_tforms_and_cameraviews_queue = tf.FIFOQueue(capacity=80000, dtypes=[tf.float32,tf.float32],shapes=[[4,4],[4,4]])
         self.r_tforms_enq = tf.placeholder(tf.float32)
         self.r_cameraviews_enq = tf.placeholder(tf.float32)
-        self.r_tforms_cameraviews_enque = self._tforms_and_cameraviews_queue.enqueue_many([self.r_tforms_enq,
+        self.r_tforms_cameraviews_enq = self._r_tforms_and_cameraviews_queue.enqueue_many([self.r_tforms_enq,
                                                                                            self.r_cameraviews_enq])
         # REGENERATOR: create deque and image generation pipeline
-        self.r_tform,self.r_cameraview = self._tforms_and_cameraviews_queue.dequeue()
+        self.r_tform,self.r_cameraview = self._r_tforms_and_cameraviews_queue.dequeue()
         self.r_tformed_lig_coords,_ = av4_utils.affine_transform(self.lig_coords, self.r_tform)
         self.r_complex_image,_,_ = av4_input.convert_protein_and_ligand_to_image(self.lig_elements,
                                                                                  self.r_tformed_lig_coords,
@@ -256,43 +256,42 @@ class SearchAgent:
 
         except tf.errors.DeadlineExceededError:
             # create training examples for the main queue
-            sel_lig_pose_transforms,sel_cameraviews = evaluated.convert_into_training_batch(
-                cameraviews_initial_pose=20,generated_poses=200,remember_poses=300)
-
+            sel_lig_tforms,sel_cameraviews = evaluated.convert_into_training_batch(
+                cameraviews_initial_pose=20,generated_poses=80,remember_poses=300)
 
             # accurately terminate all threads without closing the queue (uses custom QueueRunner class)
-            self.sess.run(self._affine_tforms_queue.enqueue_many(self.identity_matrices))
             self.coord.request_stop()
+            self.sess.run(self._affine_tforms_queue.enqueue_many(self.identity_matrices))
             self.coord.join()
             self.coord.clear_stop()
-
-            # remove all affine transform matrices from the queue to be empty before the next protein/ligand
-            av4_utils.dequeue_all(self.sess,self._affine_tforms_queue)
-            av4_utils.dequeue_all(self.sess,self.image_queue)
+            av4_utils.dequeue_all(self.sess,self._affine_tforms_queue) # empty affine transform queue
+            av4_utils.dequeue_all(self.sess,self.image_queue)          # empty image queue
 
             # regenerate a selected batch of images from ligand transformations and cameraviews
             # enqueue the REGENERATOR
-            self.sess.run([self.r_tforms_cameraviews_enque],
-                          feed_dict={self.r_tforms_enq: sel_lig_pose_transforms,
+            self.sess.run([self.r_tforms_cameraviews_enq],
+                          feed_dict={self.r_tforms_enq: sel_lig_tforms,
                                      self.r_cameraviews_enq: sel_cameraviews})
 
             # start threads to fill the REGENERATOR queue
-            self.r_enqueue_threads = self.r_queue_runner.create_threads(self.sess, coord=self.coord, start=True, daemon=True)
+            self.r_enqueue_threads = self.r_queue_runner.create_threads(self.sess, coord=self.coord,
+                                                                        start=True, daemon=True)
 
             # dequeue the REGENERATOR batch
             my_r_image_batch = self.sess.run([self.image_batch],
-                                             feed_dict={self.keep_prob: 1}, options=tf.RunOptions(timeout_in_ms=1000))
+                                             feed_dict={self.keep_prob: 1},
+                                             options=tf.RunOptions(timeout_in_ms=1000))
 
             # TODO: stilll .................
             print my_r_image_batch
 
-            # accurately terminate all threads without closing the queue (uses custom QueueRunner class)
-            self.sess.run(self._tforms_and_cameraviews_queue.enqueue_many([self.identity_matrices,self.identity_matrices]))
             self.coord.request_stop()
+            # accurately terminate all threads without closing the queue (uses custom QueueRunner class)
+            self.sess.run(self._r_tforms_and_cameraviews_queue.enqueue_many([self.identity_matrices,
+                                                                             self.identity_matrices]))
             self.coord.join()
             self.coord.clear_stop()
-
-            # remove all affine transform matrices from the queue to be empty before the next protein/ligand
-            av4_utils.dequeue_all(self.sess,self._tforms_and_cameraviews_queue)
+            av4_utils.dequeue_all(self.sess,self._r_tforms_and_cameraviews_queue)
             av4_utils.dequeue_all(self.sess,self.image_queue)
+
         return None
