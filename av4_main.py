@@ -2,7 +2,7 @@ import time,os
 import tensorflow as tf
 import numpy as np
 from av4_input import index_the_database_into_queue,image_and_label_queue
-from av4_networks import *
+import av4_networks
 
 # telling tensorflow how we want to randomly initialize weights
 
@@ -31,7 +31,7 @@ def train():
     keep_prob = tf.placeholder(tf.float32)
 
     with tf.name_scope("network"):
-        predicted_labels = max_net(image_batch,keep_prob,FLAGS.batch_size)
+        predicted_labels = av4_networks.max_net.compute_output(image_batch,keep_prob,FLAGS.batch_size)
 
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=predicted_labels,labels=label_batch)
     cross_entropy_mean = tf.reduce_mean(cross_entropy)
@@ -39,7 +39,7 @@ def train():
 
     # randomly shuffle along the batch dimension and calculate an error
     shuffled_labels = tf.random_shuffle(label_batch)
-    shuffled_cross_entropy_mean = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(predicted_labels,shuffled_labels))
+    shuffled_cross_entropy_mean = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=predicted_labels,labels=shuffled_labels))
     tf.summary.scalar('shuffled cross entropy mean', shuffled_cross_entropy_mean)
 
     # Adam optimizer is a very heart of the network

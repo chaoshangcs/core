@@ -194,7 +194,7 @@ def deep_affine_transform(coords,deep_transition_matrix):
 
 
 
-def generate_exhaustive_affine_transform(shift_ranges=[5,5,5],shift_deltas=[1,1,1],rot_ranges=[360,360,360]):
+def generate_exhaustive_affine_transform(shift_ranges=[3,3,3],shift_deltas=[1,1,1],rot_ranges=[360,360,360]):
     """By default,makes shifts by 1, in X,Y,Z directions"""
 
     # shift along X,Y,Z
@@ -336,7 +336,11 @@ def generate_identity_matrices(num_frames):
 
 def describe_variables(vals):
     "Take a dictionary of variables and variable names, and prints statistics."
-    print "==============================================================================="
+    print "================================================================================"
+    for val in vals:
+        print "val:",val
+        print vals[val]
+        time.sleep(0.1)
     for val in vals:
         print val,"\tlen:",len(vals[val]), "min:","%.3f" %  min(vals[val]), "max:","%.3f" % max(vals[val]),"ave:",
         print "%.3f" % np.average(vals[val]), "median:", "%.3f" % np.sort(vals[val], axis=0)[len(vals[val])//2],
@@ -599,7 +603,7 @@ class QueueRunner(object):
 
         # TODO(maksym): the next two lines are the only difference from TF
         # sess.run(cancel_op)
-        1 + 1
+        pass
     except Exception as e:
       # Intentionally ignore errors from cancel_op.
       logging.vlog(1, "Ignored exception: %s", str(e))
@@ -656,11 +660,11 @@ class QueueRunner(object):
         t.daemon = True
       if start:
         t.start()
-        print "[thread_start:",started_threads,"]",
+        print "[tr:",started_threads,"]",
         started_threads+=1
 
-    time.sleep(0.25)
-    print "[all threads started. queue.size:",sess.run(self.queue.size()),"]"
+#    time.sleep(0.25)
+#    print "[all threads started. queue.size:",sess.run(self.queue.size()),"]"
 
     return ret_threads
 
@@ -701,10 +705,12 @@ class QueueRunner(object):
 
 
 
-def dequeue_all(sess,queue):
+
+def dequeue_all(sess,dequeue_op):
     try:
         while True:
             print ".",
-            sess.run(queue.dequeue(), options=tf.RunOptions(timeout_in_ms=500))
+            sess.run(dequeue_op, options=tf.RunOptions(timeout_in_ms=500))
     except tf.errors.DeadlineExceededError:
-        print "[",sess.run(queue.size()), "]"
+#        print "[",sess.run(queue.size()), "]"
+        print "queue should be empty ------------------- I can't believe this is an operation on the graph"

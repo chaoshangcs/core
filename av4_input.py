@@ -7,6 +7,8 @@ from av4_utils import generate_deep_affine_transform,affine_transform
 
 # TODO !!! A way to skip the protein to the empty screen
 # TODO: Also, the current pipeline does not support ligands that are too big
+# TODO: once I have non-deterministic search, it would be great to monitor my progress from saved checkpoints with deterministic search
+
 
 
 def index_the_database_into_queue(database_path,shuffle):
@@ -116,7 +118,7 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
     # FIXME abandon ligand when it does not fit into the box (it's kept now)
 
     # max_num_attempts - maximum number of affine transforms for the ligand to be tried
-    max_num_attemts = 50000
+    max_num_attemts = 1000                      # TODO this should happen on the level of data preparation
     # affine_transform_pool_size is the first(batch) dimension of tensor of transition matrices to be returned
     # affine tranform pool is only generated once in the beginning of training and randomly sampled afterwards
     affine_transform_pool_size = 10000
@@ -157,11 +159,13 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
     rotatated_ligand_coords,_ = affine_transform(centered_ligand_coords,final_cameraview)
     rotated_receptor_coords,_ = affine_transform(centered_receptor_coords,final_cameraview)
 
+    # TODO: this should be an error: move this function to the level of data preparation
     # check if all of the atoms are in the box, if not set the ligand to 0, but do not raise an error
-#    def set_elements_coords_zero(): return tf.constant([0],dtype=tf.int32),tf.constant([[0,0,0]],dtype=tf.float32)
-#    def keep_elements_coords(): return ligand_elements,rotatated_ligand_coords
-#    not_all = tf.cast(tf.reduce_max(tf.cast(tf.square(box_size * 0.5) - tf.square(rotatated_ligand_coords) < 0, tf.int32)),tf.bool)
-#    ligand_elements,rotatated_ligand_coords = tf.case({tf.equal(not_all,tf.constant(True)): set_elements_coords_zero},keep_elements_coords)
+    def set_elements_coords_zero(): return tf.constant([0],dtype=tf.int32),tf.constant([[0,0,0]],dtype=tf.float32)
+    def keep_elements_coords(): return ligand_elements,rotatated_ligand_coords
+    not_all = tf.cast(tf.reduce_max(tf.cast(tf.square(box_size * 0.5) - tf.square(rotatated_ligand_coords) < 0, tf.int32)),tf.bool)
+    ligand_elements,rotatated_ligand_coords = tf.case({tf.equal(not_all,tf.constant(True)): set_elements_coords_zero},keep_elements_coords)
+    # TODO: maybe throw an error when things don't fit ??
 
     # move coordinates of a complex to an integer number so as to put every atom on a grid
     # ceiled coords is an integer number out of real coordinates that corresponds to the index on the cell
@@ -225,22 +229,21 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
     #return centered_ligand_coords,ordered_sparse_complex.indices,ligand_center_of_mass,final_transition_matrix
     #return complex_image,ligand_coords_noh,tf.constant(0),sorted_bond
 
-#def image_and_label_queue():
-#    pass
+
 
 def image_and_label_queue(batch_size,pixel_size,side_pixels,num_threads,filename_queue,epoch_counter):
-    """Creates shuffle queue for training the network"""
+   """Creates shuffle queue for training the network"""
 
-    # read one receptor and stack of ligands; choose one of the ligands from the stack according to epoch
-    ligand_file,current_epoch,label,ligand_elements,ligand_coords,receptor_elements,receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter)
+   # read one receptor and stack of ligands; choose one of the ligands from the stack according to epoch
+   ligand_file,current_epoch,label,ligand_elements,ligand_coords,receptor_elements,receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter)
 
-    # convert coordinates of ligand and protein into an image
-    #sparse_image_4d,_,_ = convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size)
-    complex_image,_,_ = convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size)
+   # convert coordinates of ligand and protein into an image
+   #sparse_image_4d,_,_ = convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size)
+   complex_image,_,_ = convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size)
 
-    # create a batch of proteins and ligands to read them together
-    multithread_batch = tf.train.batch([ligand_file,current_epoch, label,complex_image], batch_size, num_threads=num_threads,
-                                       capacity=batch_size * 3,dynamic_pad=True,shapes=[[],[], [], [20,20,20]])
+   # create a batch of proteins and ligands to read them together
+   multithread_batch = tf.train.batch([ligand_file,current_epoch, label,complex_image], batch_size, num_threads=num_threads,
+                                      capacity=batch_size * 3,dynamic_pad=True,shapes=[[],[], [], [20,20,20]])
 
-    return multithread_batch
+   return multithread_batch
 

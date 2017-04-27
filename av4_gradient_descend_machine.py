@@ -10,7 +10,7 @@ import av4_conformation_sampler
 FLAGS.saved_session = './summaries/4_netstate/saved_state-82099'
 FLAGS.predictions_file_path = re.sub("netstate","logs",FLAGS.saved_session)
 FLAGS.database_path = '../datasets/holdout_av4'
-FLAGS.num_epochs = 2
+FLAGS.num_epochs = 110
 FLAGS.top_k = FLAGS.num_epochs
 
 
@@ -20,7 +20,7 @@ class GradientDescendMachine:
     Controls sampling, infinite, or timely. Potentially, with many GPUs.
     Dependencies: FLAGS.examples_in_database should be already calculated
     """
-    def __init__(self):
+    def __init__(self,side_pixels=FLAGS.side_pixels,batch_size=FLAGS.batch_size):
 
         # create session to compute evaluation
         self.sess = FLAGS.main_session
@@ -33,7 +33,7 @@ class GradientDescendMachine:
             av4_input.read_receptor_and_ligand(filename_queue=filename_queue, epoch_counter=tf.constant(0))
 
         # create a very large queue of images for central parameter server
-
+        self.traning_queue = tf.FIFOQueue(capacity=1000000,dtypes=[tf.float32],shapes=[side_pixels,side_pixels,side_pixels])
 
         # create a way to evaluate these images with the network
 
@@ -51,12 +51,11 @@ class GradientDescendMachine:
 #            saver.restore(self.sess,FLAGS.saved_session)
 #            print "unitialized vars:", self.sess.run(tf.report_uninitialized_variables())
 
-        self.ag1 = av4_conformation_sampler.SearchAgent("AG1")
-        self.ag2 = av4_conformation_sampler.SearchAgent("AG2")
+        self.ag1 = av4_conformation_sampler.SearchAgent("AG1", self.traning_queue)
+        self.ag2 = av4_conformation_sampler.SearchAgent("AG2", self.traning_queue)
 
-        self.sess.run(tf.global_variables_initializer())
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess = self.sess,coord=coord)
+        self.coord = tf.train.Coordinator()
+#        threads = tf.train.start_queue_runners(sess = self.sess,coord=coord)
 
 
     def do_sampling(self, sample_epochs=None):
@@ -91,18 +90,31 @@ class GradientDescendMachine:
             while not pose_samplers_stop():
                 # def grid_evaluate_positions(self, my_lig_elements, my_lig_coords, my_rec_elements, my_rec_coords):
                 lig_elems, lig_coords, rec_elems, rec_coords = lig_rec_elems_coords()
-                self.ag1.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
+ #               self.ag1.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
 
         def search_agent_2():
             # with TF. device GPU2
             # create an instance of a search agent that will run on this GPU
             while not pose_samplers_stop():
                 lig_elems, lig_coords, rec_elems, rec_coords = lig_rec_elems_coords()
-                self.ag2.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
+#                self.ag2.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
 
-        # start threads for conformation sampling
+
+        # Only in this order 1# Initialize Variables 2# Start threads
+        self.sess.run(tf.global_variables_initializer())
+        tf.get_default_graph().finalize()
+
+        threads = tf.train.start_queue_runners(sess=self.sess, coord=self.coord)
         t1 = threading.Thread(target=search_agent_1).start()
         t2 = threading.Thread(target=search_agent_2).start()
+
+        tf.logging.set_verbosity(tf.logging.DEBUG)
+
+
+        while True:
+ #           print "examples in the training queue", self.sess.run(self.traning_queue.size())
+            print "examples in the main queue - unknown"
+            time.sleep(1)
 
 
 
@@ -119,7 +131,7 @@ class GradientDescendMachine:
 #threads = tf.train.start_queue_runners(sess =FLAGS.main_session,coord=coord)
 
 a = GradientDescendMachine()
-a.do_sampling(sample_epochs=1)
+a.do_sampling(sample_epochs=10)
 
 #search_agent1 = av4_conformation_sampler.SearchAgent()
 
