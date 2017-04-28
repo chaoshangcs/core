@@ -6,6 +6,7 @@ from config import lock
 from functools import wraps
 import time
 import subprocess
+import json 
 
 mkdir = lambda path: os.system('mkdir -p {}'.format(path))
 
@@ -85,6 +86,31 @@ def insert(tabel, content, head, lock):
         
     lock.release()
 
+
+def param_equal(param1, param2):
+    if type(param1).__name__ == 'dict' and type(param2).__name__ == 'dict':
+
+        if not sorted(param1.keys()) == sorted(param2.keys()):
+            return False 
+        else:
+            for key in param1.keys():
+                if not param_equal(param1[key], param2[key]):
+                    return False
+            return True
+    elif type(param1).__name__ in ['list','tuple'] and type(param2).__name__ in ['list','tuple']:
+        if not sorted(list(param1)) == sorted(list(param2)):
+            return False
+        else:
+            return True
+    elif type(param1).__name__ in ['unicode','str','int','float'] and type(param2).__name__ in ['unicode','str','int','float']:
+        if not str(param1) == str(param2):
+            return False 
+        else:
+            return True 
+    else:
+        raise TypeError("Unknown data type %s in parameter" % type(param1).__name__)
+    
+         
 
 @lockit
 def log(log_file, log_content, head=None, lock=None):
@@ -184,6 +210,22 @@ class smina_param:
     def load_param(self, *arg, **kw):
         self.args = arg
         self.kwargs = kw
+
+    def param_dump(self):
+        param = {
+            'args':self.args,
+            'kwargs':self.kwargs
+        }
+        
+        return param
+        
+    def param_load(self, param):
+        if type(param).__name__ in ['unicode','str']:
+            param = json.loads(param)
+        
+        self.args = param['args']
+        self.kwargs = param['kwargs']
+        
 
     def make_command(self, *arg, **kw):
         cmd = self.smina

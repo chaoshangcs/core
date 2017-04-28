@@ -16,7 +16,7 @@ Parameter
 db_name='affinity.db'
 
 # number of process running at the same time
-process_num = 1
+process_num = 8
 
 
 # RENAMES:
@@ -86,9 +86,10 @@ Folders
 # the path for this script config.py
 script_path = sys.path[0]
 #base folder for all the output
-database_root = os.path.join(script_path, '..', 'AffinityDB')
-
+#database_root = os.path.join(script_path, '..', 'AffinityDB')
+database_root = '/home/xander/affinityDB/test_v2'
 db_path =os.path.join(database_root, db_name)
+data_dir = os.path.join(database_root,'data')
 # pdb download from Protein DataBank
 pdb_download_path = os.path.join(database_root,'data','1_download')
 
@@ -115,12 +116,12 @@ File Path
 """
 
 # path of smina binary file
-smina = 'smina.static'
-
+#smina = 'smina.static'
+smina = '/home/xander/Program/smina/smina.static'
 
 # pdb_target_list
-list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
-
+#list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
+list_of_PDBs_to_download = '/home/xander/affinityDB/target_list/small_list.txt'
 
 # example scoring
 scoring_terms = os.path.join(sys.path[0], 'scoring', 'smina.score')
@@ -129,10 +130,36 @@ scoring_terms = os.path.join(sys.path[0], 'scoring', 'smina.score')
 """
 docking para
 """
+smina_dock_pm = {
+    'vinardo':{
+        'args': [],
+        'kwargs' : {
+            'autobox_add':12,
+            'num_modes':400,
+            'exhaustiveness':64,
+            'scoring':'vinardo',
+            'cpu':1
+        }
+    },
+    'smina_default':{
+        'args':[],
+        'kwargs':{
+            'num_modes':400,
+            'cpu':1
+        }
+    },
+    'reorder':{
+        'args':['score_only'],
+        'kwargs':{
+            'custom_scoring':scoring_terms 
+        }
+    }
+
+}
 
 vinardo_pm = {
-    'arg': [],
-    'kwarg' : {
+    'args': [],
+    'kwargs' : {
     'autobox_add':12,
     'num_modes':400,
     'exhaustiveness':64,
@@ -142,16 +169,25 @@ vinardo_pm = {
 }
 
 smina_pm = {
-    'arg':[],
-    'kwarg':{
+    'args':[],
+    'kwargs':{
     'num_modes':400,
     'cpu':1
     }
 }
 
 reorder_pm = {
-    'arg':['score_only'],
-    'kwarg':{
+    'args':['score_only'],
+    'kwargs':{
     'custom_scoring':scoring_terms 
     }
+}
+
+overlap_default = {
+    'clash_cutoff_A':4,
+    'clash_size_cutoff':0.3
+}
+
+native_contace_default = {
+    'distance_threshold':4.0
 }
