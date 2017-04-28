@@ -126,4 +126,5 @@ def deepVS_net(ligand_atoms, ligand_coords, keep_prob):
 	#dropout
 	#output layer
 	z_output = fc_layer(layer_name='out_neuron', input_tensor=z_fc1, output_dim=2)
-	return z_output
+	z_labels = tf.reshape(z_output, [2])
+	return z_labels
