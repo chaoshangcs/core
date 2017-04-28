@@ -4,6 +4,8 @@ import numpy as np
 from deepVS_input import index_the_database_into_queue,data_and_label_queue, read_receptor_and_ligand
 from deepVS_net import *
 
+#BATCHING TEST
+
 def train():
 	sess = tf.Session()
 
