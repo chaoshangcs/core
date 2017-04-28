@@ -24,7 +24,7 @@ def softmax_cross_entropy_with_RMSD(logits,lig_RMSDs,RMSD_threshold=3.0):
     return cost_incorrect_positions + cost_semicorrect_positions + cost_correct_positions
 
 
-class SearchAgent:
+class SamplingAgent:
     """ Search agent takes a single protein with a bound ligand, samples many possible protein-ligand conformations,
     as well as many camera views of the correct position, and outputs a single batch of images and labels for training
     on which network makes biggest error, and gradient is highest.
@@ -126,6 +126,7 @@ class SearchAgent:
 
     def __init__(self,
                  agent_name,
+                 gpu_name,
                  training_queue,
                  side_pixels=FLAGS.side_pixels,
                  pixel_size=FLAGS.pixel_size,
@@ -178,8 +179,10 @@ class SearchAgent:
 
         self.image_batch, self.lig_pose_tform_batch, self.cameraview_batch, self.lig_RMSD_batch = image_queue.dequeue_many(batch_size)
         self.keep_prob = tf.placeholder(tf.float32)
-        with tf.name_scope("network"):
-            y_conv = av4_networks.max_net.compute_output(self.image_batch, self.keep_prob, batch_size)
+        if gpu_name is not None:
+            with tf.device(gpu_name):
+                with tf.name_scope("network"):
+                    y_conv = av4_networks.max_net.compute_output(self.image_batch, self.keep_prob, batch_size)
 
         # calculate both predictions, and costs for every ligand position in the batch
         self.pred_batch = tf.nn.softmax(y_conv)[:,1]

@@ -15,6 +15,53 @@ FLAGS.top_k = FLAGS.num_epochs
 
 
 
+class SamplingAgentonGPU:
+
+    def __init__(self, agent_name, gpu_name, filename_queue, sampling_coord, training_queue, sess):
+        self.sampling_coord = sampling_coord
+        self.sess = sess
+        self.filename_queue = filename_queue
+        self.ag = av4_conformation_sampler.SamplingAgent(agent_name,gpu_name,training_queue)
+
+        self.lig_file, _, _, self.lig_elem, self.lig_coord, self.rec_elem, self.rec_coord = \
+            av4_input.read_receptor_and_ligand(filename_queue=self.filename_queue, epoch_counter=tf.constant(0))  # FIXME: change epoch counter
+
+        print "SamplingAgentonGPU:",agent_name,"successfully initialized on device:",gpu_name
+
+    def _count_example(self):
+        if (self.sampling_coord.run_samples is not None) and (self.sampling_coord.run_samples > 0):
+            with self.sampling_coord.lock:
+                self.sampling_coord.run_samples = self.sampling_coord.run_samples - 1
+            return None
+        elif (self.sampling_coord.run_samples is not None) and (self.sampling_coord.run_samples <= 0):
+            self.sampling_coord.request_stop()
+            return None
+        else:
+            return None
+
+    def _do_sampling(self):
+        # with TF. device GPU1
+        # create an instance of a search agent that will run on this GPU
+        while not self.sampling_coord.should_stop():
+            try:
+                # read receptor and ligand from the queue
+                # evaluate all positions for this ligand and receptor
+                self.ag.grid_evaluate_positions(*self.sess.run([self.lig_elem,self.lig_coord,self.rec_elem,self.rec_coord]))
+                print "next", time.sleep(0.01)
+                self._count_example()
+
+            except Exception as ex:
+                self.sampling_coord.request_stop(ex=ex)
+        return None
+
+    def start(self):
+        # start a thread for this agent
+        tr = threading.Thread(target=self._do_sampling)
+        self.sampling_coord.threads.append(tr)
+        tr.start()
+
+
+
 class GradientDescendMachine:
     """ Does sompling and training
     Controls sampling, infinite, or timely. Potentially, with many GPUs.
@@ -22,15 +69,14 @@ class GradientDescendMachine:
     """
     def __init__(self,side_pixels=FLAGS.side_pixels,batch_size=FLAGS.batch_size):
 
+        # try to capture all of the events that happen in many background threads
+        tf.logging.set_verbosity(tf.logging.DEBUG)
+
         # create session to compute evaluation
         self.sess = FLAGS.main_session
 
         # create a filename queue first
         filename_queue,self.ex_in_database = av4_input.index_the_database_into_queue(FLAGS.database_path, shuffle=True)
-
-        # read receptor and ligand from the queue
-        self.lig_file,_,_,self.lig_elements,self.lig_coords,self.rec_elements,self.rec_coords = \
-            av4_input.read_receptor_and_ligand(filename_queue=filename_queue, epoch_counter=tf.constant(0))
 
         # create a very large queue of images for central parameter server
         self.traning_queue = tf.FIFOQueue(capacity=1000000,dtypes=[tf.float32],shapes=[side_pixels,side_pixels,side_pixels])
@@ -51,88 +97,46 @@ class GradientDescendMachine:
 #            saver.restore(self.sess,FLAGS.saved_session)
 #            print "unitialized vars:", self.sess.run(tf.report_uninitialized_variables())
 
-        self.ag1 = av4_conformation_sampler.SearchAgent("AG1", self.traning_queue)
-        self.ag2 = av4_conformation_sampler.SearchAgent("AG2", self.traning_queue)
 
-        self.coord = tf.train.Coordinator()
-#        threads = tf.train.start_queue_runners(sess = self.sess,coord=coord)
+        # configure sampling
+        self.sampling_coord = tf.train.Coordinator()
+        self.sampling_coord.lock = threading.Lock()
+
+        self.ag1 = SamplingAgentonGPU("AG1","/gpu:0",filename_queue, self.sampling_coord, self.traning_queue, self.sess )
+
 
 
     def do_sampling(self, sample_epochs=None):
-        """ COntrols all of the sampling by multiple agents
+        """ Controls all of the sampling by multiple agents
         """
-        self.run_samples = None
 
-        if sample_epochs is not None:
-            self.run_samples = self.ex_in_database * sample_epochs
-
-        def lig_rec_elems_coords():
-            " Takes elements and coordinates from the next receptor and ligand"
-            my_lig_file, my_lig_elements, my_lig_coords, my_rec_elements, my_rec_coords = self.sess.run(
-                [self.lig_file, self.lig_elements, self.lig_coords, self.rec_elements, self.rec_coords])
-            print "ligand file runs for sampling:", my_lig_file
-            return my_lig_elements, my_lig_coords, my_rec_elements, my_rec_coords
-
-        def pose_samplers_stop():
-            if (sample_epochs is None) and (self.run_samples is None):
-                return False
-            elif (sample_epochs is not None) and (self.run_samples > 0):
-                self.run_samples = self.run_samples - 1
-                return False
-            elif (sample_epochs is not None) and (self.run_samples <= 0):
-                return True
-            else:
-                raise RuntimeError('either both or neither self.run_samples, self.sample_epochs should be None')
-
-        def search_agent_1():
-            # with TF. device GPU1
-            # create an instance of a search agent that will run on this GPU
-            while not pose_samplers_stop():
-                # def grid_evaluate_positions(self, my_lig_elements, my_lig_coords, my_rec_elements, my_rec_coords):
-                lig_elems, lig_coords, rec_elems, rec_coords = lig_rec_elems_coords()
- #               self.ag1.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
-
-        def search_agent_2():
-            # with TF. device GPU2
-            # create an instance of a search agent that will run on this GPU
-            while not pose_samplers_stop():
-                lig_elems, lig_coords, rec_elems, rec_coords = lig_rec_elems_coords()
-#                self.ag2.grid_evaluate_positions(lig_elems, lig_coords, rec_elems, rec_coords)
+        self.sampling_coord.threads = []
+        if sample_epochs is None:
+            self.sampling_coord.run_samples = None
+        else:
+            self.sampling_coord.run_samples = self.ex_in_database * sample_epochs
 
 
-        # Only in this order 1# Initialize Variables 2# Start threads
         self.sess.run(tf.global_variables_initializer())
         tf.get_default_graph().finalize()
+        threads = tf.train.start_queue_runners(sess=self.sess, coord=self.sampling_coord)
 
-        threads = tf.train.start_queue_runners(sess=self.sess, coord=self.coord)
-        t1 = threading.Thread(target=search_agent_1).start()
-        t2 = threading.Thread(target=search_agent_2).start()
+        self.ag1.start()
 
-        tf.logging.set_verbosity(tf.logging.DEBUG)
+        # in continuous regime continue without stopping the threads
+        if sample_epochs is not None:
+            self.sampling_coord.join(self.sampling_coord.threads)
+            self.sampling_coord.clear_stop()
 
-
-        while True:
- #           print "examples in the training queue", self.sess.run(self.traning_queue.size())
-            print "examples in the main queue - unknown"
-            time.sleep(1)
+        return None
 
 
 
 
 
-
-#Class TrainingController:
-#    def __init__(self):
-#        for i in range(100):
-#            print "doing training"
-
-
-#coord = tf.train.Coordinator()
-#threads = tf.train.start_queue_runners(sess =FLAGS.main_session,coord=coord)
 
 a = GradientDescendMachine()
-a.do_sampling(sample_epochs=10)
+a.do_sampling(sample_epochs=1)
 
-#search_agent1 = av4_conformation_sampler.SearchAgent()
 
 print "All Done"
