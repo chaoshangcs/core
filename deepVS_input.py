@@ -63,7 +63,7 @@ def read_receptor_and_ligand(filename_queue,epoch_counter,train):
         # second (horizontal dimension) is x,y,z coordinate of every atom and is always 3
         # third (depth) dimension corresponds to the number of frames
 
-        coords_shape = tf.concat(0, [number_of_atoms, [3], number_of_frames])
+        coords_shape = tf.concat([number_of_atoms, [3], number_of_frames],0)
         tmp_coords = tf.slice(tmp_decoded_record, number_of_frames + number_of_atoms + 1,
                               tf.shape(tmp_decoded_record) - number_of_frames - number_of_atoms - 1)
         multiframe_coords = tf.bitcast(tf.reshape(tmp_coords, coords_shape), type=tf.float32)
@@ -88,10 +88,14 @@ def read_receptor_and_ligand(filename_queue,epoch_counter,train):
 
         def select_pos_frame(): return tf.constant(0)
         def select_neg_frame(): return tf.mod(tf.div(1+epoch_counter,2), tf.shape(ligand_labels) - 1) +1
-        if train==True:
-            current_frame = tf.cond(tf.equal(tf.mod(epoch_counter+idx+1,2),1),select_pos_frame,select_neg_frame)
-        else:
-            current_frame = tf.mod(epoch_counter,tf.shape(ligand_labels))
+
+        current_frame = tf.cond(tf.equal(tf.mod(epoch_counter + idx + 1, 2), 1), select_pos_frame, select_neg_frame)
+
+#        if train==True:
+#        current_frame = tf.cond(tf.equal(tf.mod(epoch_counter+idx+1,2),1),select_pos_frame,select_neg_frame)
+#        else:
+
+#            current_frame = tf.mod(epoch_counter,tf.shape(ligand_labels))
         return current_frame
 
     current_frame = count_frame_from_epoch(epoch_counter,ligand_labels,train)
