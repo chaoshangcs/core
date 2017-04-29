@@ -4,16 +4,14 @@ import numpy as np
 from deepVS_input import index_the_database_into_queue,data_and_label_queue, read_receptor_and_ligand
 from deepVS_net import *
 
-#BATCHING TEST
-
 def train():
-	sess = tf.Session()
+    sess = tf.Session()
 
-	#create a filename queue first
-	filename_queue, examples_in_database = index_the_database_into_queue(FLAGS.database_path, shuffle=True)
+    #create a filename queue first
+    filename_queue, examples_in_database = index_the_database_into_queue(FLAGS.database_path, shuffle=True)
 
-	#create an epoch counter
-	batch_counter = tf.Variable(0)
+    #create an epoch counter
+    batch_counter = tf.Variable(0)
     batch_counter_increment = tf.assign(batch_counter,tf.Variable(0).count_up_to(np.round((examples_in_database*FLAGS.num_epochs)/FLAGS.batch_size)))
     epoch_counter = tf.div(batch_counter*FLAGS.batch_size,examples_in_database)
 
@@ -33,7 +31,7 @@ def train():
     cross_entropy_mean = tf.reduce_mean(cross_entropy)
     tf.summary.scalar('cross entropy mean', cross_entropy_mean)
 
-	# randomly shuffle along the batch dimension and calculate an error
+    # randomly shuffle along the batch dimension and calculate an error
     shuffled_labels = tf.random_shuffle(labels_batch)
     shuffled_cross_entropy_mean = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=shuffled_labels, logits=predicted_labels))
     tf.summary.scalar('shuffled cross entropy mean', shuffled_cross_entropy_mean)
@@ -60,13 +58,13 @@ def train():
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
     while True:
-    	start = time.time()
-    	batch_num = sess.run(batch_counter_increment)
-    
-    	epo, c_entropy_mean, _ = sess.run([current_epoch, cross_entropy_mean, train_step_run], feed_dict={keep_prob:0.5})
+        start = time.time()
+        batch_num = sess.run(batch_counter_increment)
 
-    	print "epoch:",epo[0],"global step:", batch_num, "\tcross entropy mean:", c_entropy_mean,
-		print "\texamples per second:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
+        epo, c_entropy_mean, _ = sess.run([current_epoch, cross_entropy_mean, train_step_run], feed_dict={keep_prob:0.5})
+
+        print "epoch:",epo[0],"global step:", batch_num, "\tcross entropy mean:", c_entropy_mean,
+        print "\texamples per second:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
 
 
 class FLAGS:
@@ -105,7 +103,7 @@ def main(_):
     # FLAGS.run_index defines when
     FLAGS.run_index = 1
     while ((tf.gfile.Exists(summaries_dir + "/"+ str(FLAGS.run_index) +'_train' ) or tf.gfile.Exists(summaries_dir + "/" + str(FLAGS.run_index)+'_test' ))
-           or tf.gfile.Exists(summaries_dir + "/" + str(FLAGS.run_index) +'_netstate') or tf.gfile.Exists(summaries_dir + "/" + str(FLAGS.run_index)+'_logs')) and FLAGS.run_index < 1000:
+            or tf.gfile.Exists(summaries_dir + "/" + str(FLAGS.run_index) +'_netstate') or tf.gfile.Exists(summaries_dir + "/" + str(FLAGS.run_index)+'_logs')) and FLAGS.run_index < 1000:
         FLAGS.run_index += 1
     else:
         tf.gfile.MakeDirs(summaries_dir + "/" + str(FLAGS.run_index) +'_train' )
