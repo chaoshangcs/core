@@ -11,14 +11,13 @@ from functools import partial
 from glob import glob
 from utils import log, smina_param, timeit, count_lines
 import numpy as np 
-import openbabel
+#import openbabel
 import prody
 import config
 from config import data_dir
 from db_v2 import AffinityDatabase
 
 db = AffinityDatabase()
-FLAGS = None
 
 def _makedir(path):
     if not os.path.exists(path):
@@ -127,7 +126,7 @@ def split_receptor(table_sn, param, datum):
                 prody.writePDB(os.path.join(rec_dir, rec_name), rec)
 
 
-                datum = [receptor, chain, resnum, resname, heavy_atom, 1, 'success']
+                datum = [receptor, chain, resnum, resname, heavy_atom, header['experiment'], header['resolution'] , 1 , 'success']
                 data = [datum]
                 db.insert(table_sn, data)
             except Exception as e:

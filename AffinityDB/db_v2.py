@@ -246,6 +246,46 @@ class AffinityDatabase:
         values = cursor.fetchall()
         return values
 
+    def get_all_sns(self):
+        
+        stmt = 'select table_sn from db_info;'
+        cursor = self.conn.cursor()
+        cursor.execute(stmt)
+        values = cursor.fetchall()
+        values = map(lambda x:x[0], values)
+        return values
+
+    def get_sns_by_type(self, table_type):
+        
+        stmt = 'select table_sn from db_info '
+        stmt += ' where type="%s";' % table_type
+        cursor = self.conn.cursor()
+        cursor.execute(stmt)
+        values = cursor.fetchall()
+        values = map(lambda x:x[0], values)
+        return values
+
+    def get_success_data(self, sn, dataframe=False):
+        sn = int(sn)
+        table_name, table_param = self.get_table(sn, with_param=True)
+        stmt = 'select * from ' + table_name 
+        stmt += ' where state=1'
+        cursor = self.conn.cursor()
+        cursor.execute(stmt)
+        values = cursor.fetchall()
+        columns = list(map(lambda x:x[0], cursor.description))
+        
+        if dataframe:
+            try:
+                import pandas as pd 
+            except:
+                raise Exception("Cannot import pandas")
+            df = pd.DataFrame(values, columns=columns)
+            return (table_name, table_param, df)
+        else:
+            return (table_name, table_param, columns,  values)
+
+
     def init_table(self):
         print 'init'
         for tab in basic_tables.values():

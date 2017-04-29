@@ -88,27 +88,14 @@ script_path = sys.path[0]
 #base folder for all the output
 #database_root = os.path.join(script_path, '..', 'AffinityDB')
 database_root = '/home/xander/affinityDB/test_v2'
-db_path =os.path.join(database_root, db_name)
-data_dir = os.path.join(database_root,'data')
-# pdb download from Protein DataBank
-pdb_download_path = os.path.join(database_root,'data','1_download')
 
-splited_path = os.path.join(database_root, 'data','2_splited')
-# splited receptor
-splited_receptors_path = os.path.join(splited_path,'receptors')
-# splited ligands
-splited_ligands_path = os.path.join(splited_path, 'ligands')
+db_path =os.path.join(database_root, db_name)
+
+data_dir = os.path.join(database_root,'data')
 # log files
 log_dir = os.path.join(database_root, 'log')
 # csv files
 table_dir = os.path.join(database_root, 'table')
-# ligands docked by smina , scoring function: vinardo                       # will c
-vinardo_docked_path = os.path.join(database_root, 'data','3_vinardo_dock')
-# ligands docked by smina , scoring function: default
-smina_docked_path = os.path.join(database_root, 'data','4_smina_dock')
-
-
-
 
 
 """
@@ -183,9 +170,23 @@ reorder_pm = {
     }
 }
 
+overlap_pm = {
+    'overlap_default':{
+        'clash_cutoff_A':4,
+        'clash_size_cutoff':0.3
+    }
+}
+
+
 overlap_default = {
     'clash_cutoff_A':4,
     'clash_size_cutoff':0.3
+}
+
+native_contact_pm = {
+    'native_contact_default':{
+        'distance_threshold':4.0
+    }
 }
 
 native_contace_default = {

@@ -77,6 +77,8 @@ tables = {
                                 ('resnum','text'),
                                 ('resname','text'),
                                 ('heavy_atom','integer'),
+                                ('experiment','text'),
+                                ('resolution','real'),
                                 ('state','integer'),
                                 ('comment','text')
                             ]

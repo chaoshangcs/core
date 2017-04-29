@@ -26,6 +26,7 @@ def get_arguments():
     parser.add_argument('--create',dest='db_create', action='store_true')
     parser.add_argument('--continue',dest='db_continue', action='store_true')
     parser.add_argument('--delete',dest='db_delete', action='store_true')
+    parser.add_argument('--progress', dest='db_progress', action='store_true')
     parser.add_argument('--action', type=str)
     parser.add_argument('--dock_param', type=str)
     parser.add_argument('--folder_name', type=str)
@@ -55,14 +56,21 @@ def run_multiprocess(target_list, func):
         
         #map(func, target_list)
 
-def get_job_data(func_name, table_sn, table_param):
+
+    
+
+
+def get_job_data(func_name, table_sn, table_param, progress=False):
     
     if func_name == 'download':
         download_list = open(config.list_of_PDBs_to_download).readline().strip().split(', ')
         finished_list = db.get_all_success(table_sn)
         failed_list = db.get_all_failed(table_sn)
         rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
-    
+        
+        total = len(set(download_list))
+        finished = len(set(finished_list))
+        failed = len(set(failed_list))
 
     elif func_name in ['split_ligand','split_receptor']:
         download_sn = table_param['download_sn']
@@ -75,6 +83,10 @@ def get_job_data(func_name, table_sn, table_param):
 
         rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
 
+        total = len(set(download_list))
+        finished = len(set(finished_list))
+        failed = len(set(failed_list))
+
     elif func_name in ['reorder','dock']:
         rec_sn = table_param['receptor_sn']
         rec_list = db.get_all_success(rec_sn)
@@ -86,6 +98,10 @@ def get_job_data(func_name, table_sn, table_param):
         failed_list = db.get_all_failed(table_sn)
 
         rest_list = list(set(rec_list) & set(lig_list) - set(finished_list) | set(failed_list))
+
+        total = len(set(rec_list) & set(lig_list))
+        finished = len(set(finished_list))
+        failed = len(set(failed_list))
 
     elif func_name in ['rmsd','overlap']:
         cry_sn = table_param['crystal_sn']
@@ -101,6 +117,9 @@ def get_job_data(func_name, table_sn, table_param):
 
         rest_list = list(set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
 
+        total = len(set(cry_list) & set(doc_list))
+        finished = len(set(finished_list))
+        failed = len(set(failed_list))
 
     elif func_name == 'native_contact':
         rec_sn = table_param['receptor_sn']
@@ -117,10 +136,18 @@ def get_job_data(func_name, table_sn, table_param):
         failed_list = db.get_all_failed(table_sn)
         failed_list = map(lambda x:x[:-1], failed_list)
         rest_list = list(set(rec_list) & set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
+
+        total = len(set(rec_list) & set(cry_list) & set(doc_list))
+        finished = len(set(finished_list))
+        failed = len(set(failed_list))
+
     else:
         raise Exception("unknown func_name %s" % func_name)
 
-    return rest_list
+    if progress:
+        return (total, finished, failed)
+    else:
+        return rest_list
 
 def db_create():
     if FLAGS.action == 'download':
@@ -350,6 +377,42 @@ def db_delete():
     table_sn = FLAGS.table_sn
     db.delete_table(table_sn)
 
+def db_progress():
+    if FLAGS.table_sn is None:
+        raise Exception('table_sn required')
+    
+    table_sn = FLAGS.table_sn
+
+    if table_sn:
+        table_sns = [table_sn]
+    else:
+        table_sns = sorted(db.get_all_sns())
+
+    print("Progress\n")
+
+    for table_sn in table_sns:
+        table_name, table_param = db.get_table(table_sn)
+        
+        func_name = table_param['func']
+        func = DatabaseAction[func_name]
+        if func_name == 'smina_dock':
+            table_type = 'docked_ligand'
+            data_type = 'dock'
+        elif func_name == 'reorder':
+            table_type = 'reorder_ligand'
+            data_type='reorder'
+        else:
+            table_type = func_name
+            data_type = func_name
+
+        
+        
+        total, finished, failed = get_job_data(data_type, table_sn, table_param, progress=True)
+
+        print( "{:<4.2f}%\t\tTotal jobs {:<8d} Finished {:<8d} Remain {:<8d} Table {}". \
+                format(100.*finished/total,total, finished, total - finished, table_name) )
+
+
 def main():
     if FLAGS.db_create:
         db_create()
@@ -357,6 +420,8 @@ def main():
         db_continue()
     if FLAGS.db_delete:
         db_delete()
+    if FLAGS.db_progress:
+        db_progress()
 
 
 if __name__ == '__main__':
