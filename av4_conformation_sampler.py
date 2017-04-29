@@ -198,6 +198,7 @@ class SamplingAgent:
         self._r_tforms_and_cameraviews_queue_clean = _r_tforms_and_cameraviews_queue.enqueue_many(
             [av4_utils.generate_identity_matrices(num_threads*3),
              av4_utils.generate_identity_matrices(num_threads*3)])
+
         self.r_tforms_enq = tf.placeholder(tf.float32)
         self.r_cameraviews_enq = tf.placeholder(tf.float32)
         self.r_tforms_cameraviews_enq = _r_tforms_and_cameraviews_queue.enqueue_many([self.r_tforms_enq,
@@ -220,7 +221,7 @@ class SamplingAgent:
 
         # enquer of the training queue
         # self.training_batch = tf.placeholder(tf.float32)
-        self.pass_batch_to_the_training_queue = training_queue.enqueue_many([self.image_batch])
+        self.pass_batch_to_the_training_queue = training_queue.enqueue_many([self.image_batch, self.lig_RMSD_batch])
 
 
 
