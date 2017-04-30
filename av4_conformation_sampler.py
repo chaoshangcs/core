@@ -2,7 +2,7 @@ import time
 import tensorflow as tf
 import numpy as np
 import av4_input
-from av4_main import FLAGS
+from av4_config import FLAGS
 import av4_networks
 import av4_utils
 
@@ -10,7 +10,7 @@ import av4_utils
 def softmax_cross_entropy_with_RMSD(logits,lig_RMSDs,RMSD_threshold=3.0):
     """Calculates usual sparse softmax cross entropy for two class classification between 1(correct position)
     and 0(incorrect position) and multiplies the resulting cross entropy by RMSD coefficient.
-    | RMSD_ligand > RMSD_threshold | RMSDcoeff = 0
+    | RMSD_ligand > RMSD_threshold | RMSDcoeff = 1
     | RMSD_ligand < RMSD_threshold | RMSDcoeff = (RMSD_threshold - RMSD_ligand)/RMSD_threshold
     RMSD threshold is in Angstroms.
     """
@@ -31,7 +31,6 @@ class SamplingAgent:
     Search agent also outputs a compressed form (affine transform matrices) of other conformations that would make good
     training examples, but did not make it to the batch.
     """
-    # TODO: make thread to thread exception work
     # TODO: variance option for positives and negatives
     # TODO: clustering
     # TODO: add VDW possibilities
@@ -131,7 +130,7 @@ class SamplingAgent:
                  side_pixels=FLAGS.side_pixels,
                  pixel_size=FLAGS.pixel_size,
                  batch_size=FLAGS.batch_size,
-                 num_threads=FLAGS.num_threads,
+                 num_threads=FLAGS.num_threads,                                                                         # TODO: controls
                  sess = FLAGS.main_session):
         # Generate a single ligand position from initial coordinates and a given transformation matrix.
         self.agent_name = agent_name
@@ -142,7 +141,7 @@ class SamplingAgent:
             [av4_utils.generate_identity_matrices(num_threads*3)])
 
 
-        lig_pose_tforms = tf.concat([av4_utils.generate_identity_matrices(300),
+        lig_pose_tforms = tf.concat([av4_utils.generate_identity_matrices(50),                                         # TODo controls
                                           av4_utils.generate_exhaustive_affine_transform()],
                                          0)                                                                                 # todo controls
         self._affine_tforms_queue_start = _affine_tforms_queue.enqueue_many(lig_pose_tforms)
@@ -175,7 +174,6 @@ class SamplingAgent:
 
         self.image_queue_enq = image_queue.enqueue([complex_image, lig_pose_tform, cameraview, lig_RMSD])
         self.queue_runner = av4_utils.QueueRunner(image_queue, [self.image_queue_enq]*num_threads)
-#        self.enqueue_threads = self.queue_runner.create_threads(self.sess, coord=self.coord, start=False, daemon=True)
 
         self.image_batch, self.lig_pose_tform_batch, self.cameraview_batch, self.lig_RMSD_batch = image_queue.dequeue_many(batch_size)
         self.keep_prob = tf.placeholder(tf.float32)
@@ -186,7 +184,7 @@ class SamplingAgent:
 
         # calculate both predictions, and costs for every ligand position in the batch
         self.pred_batch = tf.nn.softmax(y_conv)[:,1]
-        self.cost_batch = softmax_cross_entropy_with_RMSD(y_conv,self.lig_RMSD_batch)
+        self.cost_batch = softmax_cross_entropy_with_RMSD(y_conv, self.lig_RMSD_batch)
 
         # REGENERATOR: r_
         # This part of the pipeline is for re-creation of already scored images from affine transform matrices
@@ -194,7 +192,7 @@ class SamplingAgent:
         # Double pipeline allows to store only transformation matrices instead of images - needs less memory.
 
         # REGENERATOR: create queue and enque pipe with two placeholders
-        _r_tforms_and_cameraviews_queue = tf.FIFOQueue(capacity=80000, dtypes=[tf.float32,tf.float32],shapes=[[4,4],[4,4]])        # TODO: capasicty is very strange
+        _r_tforms_and_cameraviews_queue = tf.FIFOQueue(capacity=80000, dtypes=[tf.float32,tf.float32],shapes=[[4,4],[4,4]])        # TODO: controls
         self._r_tforms_and_cameraviews_queue_clean = _r_tforms_and_cameraviews_queue.enqueue_many(
             [av4_utils.generate_identity_matrices(num_threads*3),
              av4_utils.generate_identity_matrices(num_threads*3)])
@@ -217,16 +215,12 @@ class SamplingAgent:
         self.r_lig_RMSD = tf.reduce_mean(tf.square(self.r_tformed_lig_coords - lig_coord))**0.5
         r_image_queue_enq = image_queue.enqueue([self.r_complex_image,self.r_tform,self.r_cameraview,self.r_lig_RMSD])
         self.r_queue_runner = av4_utils.QueueRunner(image_queue, [r_image_queue_enq] * num_threads)
-#        self.r_enqueue_threads = self.r_queue_runner.create_threads(self.sess, coord=self.coord, start=False, daemon=True)
 
         # enquer of the training queue
         # self.training_batch = tf.placeholder(tf.float32)
         self.pass_batch_to_the_training_queue = training_queue.enqueue_many([self.image_batch, self.lig_RMSD_batch])
 
-
-
-        # MIGRATE ASSIGNMENT OP
-        # ADD dependency ?
+        # TODO: MIGRATE ASSIGNMENT OP
         self.lig_elem_plc = tf.placeholder(tf.int32)
         self.lig_coord_plc = tf.placeholder(tf.float32)
         self.rec_elem_plc = tf.placeholder(tf.int32)
@@ -242,14 +236,9 @@ class SamplingAgent:
         every conformation.
         """
         # Enqueue all of the transformations for the ligand to sample.
-        #self.sess.run(self._affine_tforms_queue.enqueue_many(self.lig_pose_tforms))                                         # TODO this does not woe
         self.sess.run([self._affine_tforms_queue_start])
 
         # Assign elements and coordinates of protein and ligand; shape of the variable will change from ligand to ligand
-        #self.sess.run([tf.assign(self.lig_elements,my_lig_elements, validate_shape=False, use_locking=True),                # TODO may not work
-        #               tf.assign(self.lig_coords,my_lig_coords, validate_shape=False, use_locking=True),
-        #               tf.assign(self.rec_elements,my_rec_elements, validate_shape=False, use_locking=True),
-        #               tf.assign(self.rec_coords,my_rec_coords, validate_shape=False, use_locking=True)])
         self.sess.run([self.ass_lig_elem,self.ass_lig_coord,self.ass_rec_elem,self.ass_rec_coord],
                       feed_dict={self.lig_elem_plc:my_lig_elem,self.lig_coord_plc:my_lig_coord,
                                  self.rec_elem_plc:my_rec_elem,self.rec_coord_plc:my_rec_coord})
@@ -260,7 +249,7 @@ class SamplingAgent:
         evaluated = self.EvaluationsContainer()
 
         print "shapes of the ligand and protein:", "unknown"
-#        print self.sess.run([tf.shape(self.lig_elements),                                                                   # TODO: this may not be useful here
+#        print self.sess.run([tf.shape(self.lig_elements),                                                                   # TODO: this may be useful here
 #                             tf.shape(self.lig_coords),
 #                             tf.shape(self.rec_elements),
 #                            tf.shape(self.rec_coords)])
@@ -273,7 +262,7 @@ class SamplingAgent:
 
         #try:
         #while True:
-        for i in range(5): #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        for i in range(1):                                                                                                                # TODO controls
             start = time.time()
             my_pred_batch, my_cost_batch, my_image_batch, my_lig_pose_tform_batch, my_cameraview_batch, my_lig_RMSD_batch = \
                 self.sess.run([self.pred_batch,
@@ -282,7 +271,7 @@ class SamplingAgent:
                                    self.lig_pose_tform_batch,
                                    self.cameraview_batch,
                                    self.lig_RMSD_batch],
-                                  feed_dict = {self.keep_prob:1})                                            # TODO What is this timeout comes too fast with some bad protein ??????
+                                  feed_dict = {self.keep_prob:1})
             # save the predictions and cameraviews from the batch into evaluations container
             lig_poses_evaluated = evaluated.add_batch(my_pred_batch,
                                                                my_cost_batch,
@@ -295,19 +284,18 @@ class SamplingAgent:
             print "\tpositions evaluated:",lig_poses_evaluated,
             print "\texamples per second:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
 
-        #except tf.errors.DeadlineExceededError:                                                                          # TODO: do not use "dEadline exceeded" in such an important place
-            # create training examples for the main queue
+        # create training examples for the main queue
         sel_lig_tforms,sel_cameraviews = evaluated.convert_into_training_batch(
-            cameraviews_initial_pose=20,generated_poses=80,remember_poses=300)
+            cameraviews_initial_pose=50,generated_poses=50,remember_poses=300)
+
 
         # accurately terminate all threads without closing the queue (uses custom QueueRunner class)
         self.coord.request_stop()
-        #self.sess.run(self._affine_tforms_queue.enqueue_many(self.identity_matrices))                               # TODO: does not work
         self.sess.run(self._affine_tforms_queue_clean)
         self.coord.join()
         self.coord.clear_stop()
-        av4_utils.dequeue_all(self.sess,self.tform)        # empty affine transform queue                   # TODO
-        av4_utils.dequeue_all(self.sess,self.single_image)          # empty image queue                              # TODO
+        av4_utils.dequeue_all(self.sess,self.tform)        # empty affine transform queue
+        av4_utils.dequeue_all(self.sess,self.single_image)          # empty image queue
 
         # regenerate a selected batch of images from ligand transformations and cameraviews
         # enqueue the REGENERATOR
@@ -317,25 +305,16 @@ class SamplingAgent:
 
         # start threads to fill the REGENERATOR queue
         self.r_enqueue_threads = self.r_queue_runner.create_threads(self.sess, coord=self.coord, start=True, daemon=True)
-        #self.sess.run([self.r_enqueue_threads_start])
-#       [tr.start() for tr in self.r_enqueue_threads]
 
-            # dequeue the REGENERATOR batch
-            #my_r_image_batch = self.sess.run(self.image_batch,
-            #                                 feed_dict={self.keep_prob: 1},
-            #                                 options=tf.RunOptions(timeout_in_ms=1000))
-
-        # TODO: stilll .................
-        self.sess.run(self.pass_batch_to_the_training_queue)#,feed_dict={self.training_batch:my_r_image_batch})
+        self.sess.run(self.pass_batch_to_the_training_queue)
 
         self.coord.request_stop()
         # accurately terminate all threads without closing the queue (uses custom QueueRunner class)
-        #self.sess.run(self._r_tforms_and_cameraviews_queue.enqueue_many([self.identity_matrices,                    # TODO: does not work
-        #                                                                 self.identity_matrices]))
+
         self.sess.run(self._r_tforms_and_cameraviews_queue_clean)
         self.coord.join()
         self.coord.clear_stop()
-        av4_utils.dequeue_all(self.sess,self.r_tform)                                       # TODO
-        av4_utils.dequeue_all(self.sess,self.single_image)                                                           # TODO
+        av4_utils.dequeue_all(self.sess,self.r_tform)
+        av4_utils.dequeue_all(self.sess,self.single_image)
 
         return None

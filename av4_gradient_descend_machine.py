@@ -8,14 +8,13 @@ import av4_conformation_sampler
 
 
 FLAGS.saved_session = None
-FLAGS.database_path = '../datasets/holdout_av4'
+FLAGS.database_path = '../datasets/labeled_av4'
 FLAGS.summaries_dir = './summaries'
 # it's a good tradition to name the run with a number (easy to group)
-FLAGS.run_name = '2_overnight'
+FLAGS.run_name = '7_test'
 
-FLAGS.num_epochs = 110
-FLAGS.train_bath_cameraviews_intial_pose = 20       # TODO batch of images should be a training example
-FLAGS.train_batch_generated_poses = 80              # TODO
+FLAGS.train_bath_cameraviews_intial_pose = 50         # TODO batch of images should be a training example
+FLAGS.train_batch_generated_poses = 50                # TODO
 
 
 class SamplingAgentonGPU:
@@ -85,7 +84,7 @@ class GradientDescendMachine:
         filename_queue,self.ex_in_database = av4_input.index_the_database_into_queue(FLAGS.database_path, shuffle=True)
 
         # create a very large queue of images for central parameter server
-        self.training_queue = tf.FIFOQueue(capacity=1000000,dtypes=[tf.float32,tf.float32],shapes=[[side_pixels,side_pixels,side_pixels],[]])
+        self.training_queue = tf.RandomShuffleQueue(capacity=1000000,min_after_dequeue=40000,dtypes=[tf.float32,tf.float32],shapes=[[side_pixels,side_pixels,side_pixels],[]])
         self.training_queue_size = self.training_queue.size()
 
         # create a way to train a network
@@ -104,13 +103,17 @@ class GradientDescendMachine:
 
 
 
-
-
         # configure sampling
         self.sampling_coord = tf.train.Coordinator()
         self.sampling_coord.lock = threading.Lock()
 
-        self.ag1 = SamplingAgentonGPU("AG1","/gpu:0",filename_queue, self.sampling_coord, self.training_queue, self.sess)
+        self.ag0 = SamplingAgentonGPU("AG1","/gpu:0",filename_queue, self.sampling_coord, self.training_queue, self.sess)
+        self.ag1 = SamplingAgentonGPU("AG2", "/gpu:1", filename_queue, self.sampling_coord, self.training_queue,self.sess)
+        self.ag2 = SamplingAgentonGPU("AG3", "/gpu:2", filename_queue, self.sampling_coord, self.training_queue,self.sess)
+        self.ag3 = SamplingAgentonGPU("AG4", "/gpu:3", filename_queue, self.sampling_coord, self.training_queue, self.sess)
+        self.ag4 = SamplingAgentonGPU("AG5", "/gpu:4", filename_queue, self.sampling_coord, self.training_queue, self.sess)
+        self.ag5 = SamplingAgentonGPU("AG6", "/gpu:5", filename_queue, self.sampling_coord, self.training_queue, self.sess)
+
 
         # merge all summaries and create a file writer object
         self.merged_summaries = tf.summary.merge_all()
@@ -144,7 +147,12 @@ class GradientDescendMachine:
 
         threads = tf.train.start_queue_runners(sess=self.sess, coord=self.sampling_coord)
 
+        self.ag0.start()
         self.ag1.start()
+        self.ag2.start()
+        self.ag3.start()
+        self.ag4.start()
+        self.ag5.start()
 
         # in continuous regime return immediately leaving the threads to run on the background
         # in epoch regime wait for the task to complete, for the threads to stop, then return
@@ -192,13 +200,13 @@ class GradientDescendMachine:
         # be not afraid of physics -- it brings good first-layer convolutions
 
 
+
 a = GradientDescendMachine()
 
 if tf.gfile.Exists(FLAGS.summaries_dir + "/" + str(FLAGS.run_name) +'_netstate' ):
     raise Exception('Summaries folder already exists. Please, change the run name, or delete it manually.')
 else:
     tf.gfile.MakeDirs(FLAGS.summaries_dir + "/" + str(FLAGS.run_name) +'_netstate')
-
 
 
 a.do_sampling(sample_epochs=None)
