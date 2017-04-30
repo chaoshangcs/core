@@ -28,7 +28,10 @@ def get_arguments():
     parser.add_argument('--delete',dest='db_delete', action='store_true')
     parser.add_argument('--progress', dest='db_progress', action='store_true')
     parser.add_argument('--action', type=str)
-    parser.add_argument('--dock_param', type=str)
+    parser.add_argument('--dock_param', type=str, default='vinardo')
+    parser.add_argument('--overlap_param', type=str, default='default')
+    parser.add_argument('--native_contact_param', type=str, default='default')
+    parser.add_argument('--retry_failed', action='store_true')
     parser.add_argument('--folder_name', type=str)
     parser.add_argument('--table_sn', type=int)
     parser.add_argument('--receptor_sn', type=int)
@@ -66,10 +69,13 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         download_list = open(config.list_of_PDBs_to_download).readline().strip().split(', ')
         finished_list = db.get_all_success(table_sn)
         failed_list = db.get_all_failed(table_sn)
-        rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
-        
+        if FLAGS.retry_failed:
+            rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
+        else:
+            rest_list =list(set(download_list) - set(finished_list) - set(failed_list))
+
         total = len(set(download_list))
-        finished = len(set(finished_list))
+        finished = len(set(finished_list)-set(failed_list))
         failed = len(set(failed_list))
 
     elif func_name in ['split_ligand','split_receptor']:
@@ -80,14 +86,16 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         finished_list = map(lambda x:(x[0],),finished_list)
         failed_list = db.get_all_failed(table_sn)
         failed_list = map(lambda x:(x[0],), failed_list)
-
-        rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
+        if FLAGS.retry_failed:
+            rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
+        else:
+            rest_list = list(set(download_list) - set(finished_list) - set(failed_list))
 
         total = len(set(download_list))
-        finished = len(set(finished_list))
+        finished = len(set(finished_list)-set(failed_list))
         failed = len(set(failed_list))
 
-    elif func_name in ['reorder','dock']:
+    elif func_name in ['reorder', 'dock']:
         rec_sn = table_param['receptor_sn']
         rec_list = db.get_all_success(rec_sn)
 
@@ -96,14 +104,16 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
 
         finished_list = db.get_all_success(table_sn)
         failed_list = db.get_all_failed(table_sn)
-
-        rest_list = list(set(rec_list) & set(lig_list) - set(finished_list) | set(failed_list))
+        if FLAGS.retry_failed:
+            rest_list = list(set(rec_list) & set(lig_list) - set(finished_list) | set(failed_list))
+        else:
+            rest_lsit = list(set(rec_list) & set(lig_list) - set(finished_list) - set(failed_list))
 
         total = len(set(rec_list) & set(lig_list))
-        finished = len(set(finished_list))
+        finished = len(set(finished_list)-set(failed_list))
         failed = len(set(failed_list))
 
-    elif func_name in ['rmsd','overlap']:
+    elif func_name in ['rmsd', 'overlap']:
         cry_sn = table_param['crystal_sn']
         cry_list = db.get_all_success(cry_sn)
 
@@ -111,14 +121,16 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         doc_list = db.get_all_success(doc_sn)
 
         finished_list = db.get_all_success(table_sn)
-        finished_list = map(lambda x:x[:-1], finished_list)
+        finished_list = map(lambda x: x[:-1], finished_list)
         failed_list = db.get_all_failed(table_sn)
-        failed_list = map(lambda x:x[:-1], failed_list)
-
-        rest_list = list(set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
+        failed_list = map(lambda x: x[:-1], failed_list)
+        if FLAGS.retry_failed:
+            rest_list = list(set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
+        else:
+            rest_list = list(set(cry_list) & set(doc_list) - set(finished_list) - set(failed_list))
 
         total = len(set(cry_list) & set(doc_list))
-        finished = len(set(finished_list))
+        finished = len(set(finished_list)-set(failed_list))
         failed = len(set(failed_list))
 
     elif func_name == 'native_contact':
@@ -132,13 +144,16 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         doc_list = db.get_all_success(doc_sn)
 
         finished_list = db.get_all_success(table_sn)
-        finished_list = map(lambda x:x[:-1], finished_list)
+        finished_list = map(lambda x: x[:-1], finished_list)
         failed_list = db.get_all_failed(table_sn)
-        failed_list = map(lambda x:x[:-1], failed_list)
-        rest_list = list(set(rec_list) & set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
+        failed_list = map(lambda x: x[:-1], failed_list)
+        if FLAGS.retry_failed:
+            rest_list = list(set(rec_list) & set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
+        else:
+            rest_list = list(set(rec_list) & set(cry_list) & set(doc_list) - set(finished_list) - set(failed_list))
 
         total = len(set(rec_list) & set(cry_list) & set(doc_list))
-        finished = len(set(finished_list))
+        finished = len(set(finished_list)- set(failed_list))
         failed = len(set(failed_list))
 
     else:
@@ -153,7 +168,7 @@ def db_create():
     if FLAGS.action == 'download':
         if FLAGS.folder_name is None:
             raise Exception("folder_name required")
-        
+
         folder_name = FLAGS.folder_name
         table_param = {
             'func':'download',
@@ -166,7 +181,7 @@ def db_create():
             raise Exception("folder_name required")
         if FLAGS.download_sn is None:
             raise Exception('download_sn required')
-        
+
         folder_name = FLAGS.folder_name
         download_sn = FLAGS.download_sn
         download_folder = db.get_folder(download_sn)
@@ -263,7 +278,7 @@ def db_create():
 
         crystal_sn = FLAGS.crystal_sn
         crystal_folder = db.get_folder(crystal_sn)
-        docked_sn = FLAGS.docked_sn 
+        docked_sn = FLAGS.docked_sn
         docked_folder = db.get_folder(docked_sn)
         table_param = {
             'func':'rmsd',
@@ -283,7 +298,7 @@ def db_create():
 
         crystal_sn = FLAGS.crystal_sn
         crystal_folder = db.get_folder(crystal_sn)
-        docked_sn = FLAGS.docked_sn 
+        docked_sn = FLAGS.docked_sn
         docked_folder = db.get_folder(docked_sn)
         table_param = {
             'func':'overlap',
@@ -296,7 +311,7 @@ def db_create():
             'clash_size_cutoff':0.3
         }
 
-        
+
     elif FLAGS.action == 'native_contact':
         if FLAGS.receptor_sn is None:
             raise Exception('receptor_sn required')
@@ -309,7 +324,7 @@ def db_create():
         receptor_folder = db.get_folder(receptor_sn)
         crystal_sn = FLAGS.crystal_sn
         crystal_folder = db.get_folder(crystal_sn)
-        docked_sn = FLAGS.docked_sn 
+        docked_sn = FLAGS.docked_sn
         docked_folder = db.get_folder(docked_sn)
         table_param = {
             'func':'native_contact',
@@ -327,7 +342,7 @@ def db_create():
     else:
         raise Exception("Doesn't support action {}".format(FLAGS.action))
 
-    
+
     func_name = table_param['func']
     func = DatabaseAction[func_name]
     if func_name == 'smina_dock':
@@ -335,16 +350,16 @@ def db_create():
         data_type = 'dock'
     elif func_name == 'reorder':
         table_type = 'reorder_ligand'
-        data_type='reorder'
+        data_type = 'reorder'
     else:
         table_type = func_name
         data_type = func_name
-    
+
     table_sn = db.create_table(table_type, table_param)
-    
+
     data = get_job_data(data_type, table_sn, table_param)
     run_multiprocess(data, partial(func, table_sn, table_param))
-    
+
 
 def db_continue():
     if FLAGS.table_sn is None:
@@ -361,12 +376,11 @@ def db_continue():
         data_type = 'dock'
     elif func_name == 'reorder':
         table_type = 'reorder_ligand'
-        data_type='reorder'
+        data_type = 'reorder'
     else:
         table_type = func_name
         data_type = func_name
-    
-    
+
     data = get_job_data(data_type, table_sn, table_param)
     run_multiprocess(data, partial(func, table_sn, table_param))
 
@@ -389,7 +403,8 @@ def db_progress():
         table_sns = sorted(db.get_all_sns())
 
     print("Progress\n")
-
+    if len(table_sns):
+        print("Total jobs |  Finished  | Finished(%) |   Failed   |  Failed(%)  |   Remain   |  Remain(%)  | Table name ")
     for table_sn in table_sns:
         table_name, table_param = db.get_table(table_sn)
         
@@ -408,9 +423,12 @@ def db_progress():
         
         
         total, finished, failed = get_job_data(data_type, table_sn, table_param, progress=True)
-
-        print( "{:<4.2f}%\t\tTotal jobs {:<8d} Finished {:<8d} Remain {:<8d} Table {}". \
-                format(100.*finished/total,total, finished, total - finished, table_name) )
+        print( "{:<13d} {:<11d} {:<15.2f} {:<11d} {:<14.2f} {:<11d} {:<12.2f} {}". \
+                format(total,
+                       finished, 100.*finished/total  if total else 0,
+                       failed, 100.*failed/total if total else 0,
+                       total - finished - failed, 100.*(total-finished-failed)/total if total else 0,
+                       table_name))
 
 
 def main():

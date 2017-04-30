@@ -171,7 +171,7 @@ reorder_pm = {
 }
 
 overlap_pm = {
-    'overlap_default':{
+    'default':{
         'clash_cutoff_A':4,
         'clash_size_cutoff':0.3
     }
@@ -184,7 +184,7 @@ overlap_default = {
 }
 
 native_contact_pm = {
-    'native_contact_default':{
+    'default':{
         'distance_threshold':4.0
     }
 }

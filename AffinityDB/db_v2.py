@@ -12,7 +12,8 @@ import time
 from config import lock 
 from utils import lockit, param_equal 
 import csv 
-from collections import namedtuple, OrderedDict
+import numpy as np 
+from collections import namedtuple, OrderedDict, Counter
 from database_table_v2 import basic_tables, tables
 
 class AffinityDatabase:
@@ -141,7 +142,7 @@ class AffinityDatabase:
         table_name, table_param = self.get_table(sn)
         
         if not 'folder' in table_param.keys():
-            raise Exception("table {} doesn't have corresponding folder".foramt(table_name))
+            raise Exception("table {} doesn't have corresponding folder".format(table_name))
         else:
             return table_param['folder']
 
@@ -183,7 +184,7 @@ class AffinityDatabase:
                 os.system('rm -r {}'.format(del_folder_dir))
 
         
-
+    @lockit
     def insert(self, table_sn, values, head=None):
         self.insert_or_replace(table_sn, values, head)
 
@@ -265,6 +266,7 @@ class AffinityDatabase:
         values = map(lambda x:x[0], values)
         return values
 
+
     def get_success_data(self, sn, dataframe=False):
         sn = int(sn)
         table_name, table_param = self.get_table(sn, with_param=True)
@@ -285,6 +287,24 @@ class AffinityDatabase:
         else:
             return (table_name, table_param, columns,  values)
 
+    def get_failed_reason(self, sn ):
+        sn = int(sn)
+        table_name = self.get_table(sn, with_param=False)
+        stmt = 'select comment from ' + table_name
+        stmt += ' where state=0;'
+        cursor = self.conn.cursor()
+        cursor.execute(stmt)
+        values = cursor.fetchall()
+        reason_c = Counter(values)
+        reason_n = np.asarray(reason_c.items())
+        df = pd.DataFrame(reason_n, columns=['reason','count'])
+        return (table_name, df)
+        
+        
+    def get_param(self, sn):
+        sn = int(sn)
+        table_name, param = self.get_table(sn)
+        
 
     def init_table(self):
         print 'init'
