@@ -38,6 +38,18 @@ def bias_variable(shape):
     initial = tf.constant(0.01, shape=shape)
     return tf.Variable(initial)
 
+def variable_summaries(var, name):
+    """attaches a lot of summaries to a tensor."""
+    with tf.name_scope('summaries'):
+        mean = tf.reduce_mean(var)
+        tf.summary.scalar('mean/' + name, mean)
+    with tf.name_scope('stddev'):
+        stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+        tf.summary.scalar('stddev/' + name, stddev)
+        tf.summary.scalar('max/' + name, tf.reduce_max(var))
+        tf.summary.scalar('min/' + name, tf.reduce_min(var))
+		tf.summary.histogram(name, var)
+
 def preprocess_layer(layer_name, atoms, coords):
 	#get a matrix of distances between atoms (tensor with shape [m, m])
 	coords_copy = tf.transpose(tf.expand_dims(coords, 0), perm=[1,0,2])
@@ -70,12 +82,15 @@ def embed_layer(layer_name, input_tensor):
 	with tf.name_scope(layer_name):
 		with tf.name_scope('atom_weights'):
 			W_atom = weight_variable([ATOM_TYPES, d_atm])
+			variable_summaries(W_atom, layer_name + '/atom_weights')
 		with tf.name_scope('dist_weights'):
 			W_dist = weight_variable([DIST_BINS, d_dist])
+			variable_summaries(W_dist, layer_name + '/dist_weights')
 
 		h_embed = tf.nn.embedding_lookup([W_atom, W_dist], input_tensor, name='embed_layer')
 		h_embed = tf.transpose(h_embed, perm=[0, 1, 3, 2])
 		h_embed = tf.reshape(h_embed, [1, k_c, d_atm+d_dist, -1, 1])
+		tf.summary.histogram(layer_name + '/embed_output', h_embed)
 
 	print layer_name, "output dimensions:", h_embed.get_shape()
 	return h_embed
@@ -86,9 +101,12 @@ def conv_layer(layer_name, input_tensor, filter_size, strides=[1,1,1,1,1], paddi
 	with tf.name_scope(layer_name):
 		with tf.name_scope('weights'):
 			W_conv = weight_variable(filter_size)
+			variable_summaries(W_conv, layer_name + '/weights')
 		with tf.name_scope('biases'):
 			b_conv = bias_variable([filter_size[3]])
+			variable_summaries(b_conv, layer_name + '/biases')
 		h_conv = tf.nn.conv3d(input_tensor, W_conv, strides=strides, padding=padding) + b_conv
+		tf.summary.histogram(layer_name + 'conv_output', h_conv)		
 	print layer_name,"output dimensions:", h_conv.get_shape()
 	return h_conv
 	
@@ -99,10 +117,13 @@ def fc_layer(layer_name,input_tensor,output_dim):
 
 	with tf.name_scope(layer_name):
 		weights = weight_variable([input_dim, output_dim])
+		variable_summaries(weights, layer_name + '/weights')
 	with tf.name_scope('biases'):
 		biases = bias_variable([output_dim])
+		variable_summaries(biases, layer_name + '/biases')
 	with tf.name_scope('Wx_plus_b'):
 		h_fc = tf.matmul(input_tensor, weights) + biases
+	tf.summary.histogram(layer_name + '/fc_output', h_fc)
 	print layer_name, "output dimensions:", h_fc.get_shape()
 	return h_fc
 
