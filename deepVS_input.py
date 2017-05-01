@@ -1,7 +1,6 @@
 import tensorflow as tf
 from glob import glob
 import os,time
-from av4_utils import generate_deep_affine_transform,affine_transform
 
 def index_the_database_into_queue(database_path,shuffle):
     """Indexes av4 database and returns two lists of filesystem path: ligand files, and protein files.
