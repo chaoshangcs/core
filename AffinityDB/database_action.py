@@ -23,11 +23,11 @@ def _makedir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def download(table_sn, param, datum):
-    try:
-        receptor = datum    
-        folder = param['folder']
-        folder_name = '{}_{}'.format(table_sn, folder)
+def download(table_sn, param, datum):                                                                                    # todo (maksym) remove all datums
+    try:                                                                                                                # folder = output_folder
+        receptor = datum                                                                                                # datum = pdb_id
+        folder = param['folder']                                                                                        # papram = params
+        folder_name = '{}_{}'.format(table_sn, folder)                                                                  # todo: sn == idx (everywhere)
         dest_dir = os.path.join(data_dir, folder_name)
         _makedir(dest_dir)
 
@@ -38,11 +38,10 @@ def download(table_sn, param, datum):
             
         parsed = prody.parsePDB(pdb_path)
         header = prody.parsePDBHeader(pdb_path)
-        
 
-        datum = [receptor,header['experiment'], header['resolution'], 1, 'success']
+        datum = [receptor,header['experiment'], header['resolution'], 1, 'success']                                     # datum = success report
         data = [datum]
-        db.insert(table_sn, data)
+        db.insert(table_sn, data)                                                                                       # db.insert(success_report)
     except Exception as e:
         datum = [datum,'unk',0, 0, str(e)]
         data = [datum]
@@ -52,39 +51,41 @@ def download(table_sn, param, datum):
 def split_ligand(table_sn, param, datum):
     try:
         if type(datum,).__name__ in ['tuple','list']:
-            datum = datum[0]
+            datum = datum[0]                                                                                            # do not allow x = x[0]
         
         receptor = datum
-        folder = param['folder']
-        folder = '{}_{}'.format(table_sn, folder)
-        download_folder = param['download_folder']
-        pdb_dir = os.path.join(data_dir, download_folder)
+        folder = param['folder']                                                                                        # which folder ? output_folder
+        folder = '{}_{}'.format(table_sn, folder)                                                                       # all table_sn become table_idx
+        download_folder = param['download_folder']                                                                      # rename all these into standard "source folder"
+        pdb_dir = os.path.join(data_dir, download_folder)                                                               # download_folder = source_folder
         pdb_path = os.path.join(pdb_dir, receptor+'.pdb')
         
-        parsed = prody.parsePDB(pdb_path)
-        header = prody.parsePDBHeader(pdb_path)
+        parsed = prody.parsePDB(pdb_path)                                                                               # parsed = parsed_pdb
+        header = prody.parsePDBHeader(pdb_path)                                                                         # parsed
         
-        lig_dir = os.path.join(data_dir, folder, receptor)
+        lig_dir = os.path.join(data_dir, folder, receptor)                                                              # data_dir as not an argument of the function (should come as an argument)
         _makedir(lig_dir)
 
         ligands = []
         for chem in header['chemicals']:
-            chain, resnum, resname = chem.chain, chem.resnum, chem.resname
-            ligands.append([chain, str(resnum), resname])
+ #           chain, resnum, resname = chem.chain, chem.resnum, chem.resname
+#            ligands.append([chain, str(resnum), resname])                                                               # ligands = ligands_in_pdb
+            ligands.append([chem.chain, str(chem.resnum), chem.resname])
+
 
 
         for chain, resnum, resname in ligands:
             try:
                 lig = parsed.select('chain {} resnum {}'.format(chain, resnum))
-                heavy_atom = lig.select('not hydrogen').numAtoms()
+                heavy_atom = lig.select('not hydrogen').numAtoms()                                                      # heavy_atom = heavy_lig
                 lig_name = '_'.join([receptor,chain,resnum,resname,'ligand']) + '.pdb'
                 prody.writePDB(os.path.join(lig_dir, lig_name), lig)
 
-                data = [receptor, chain, resnum, resname, heavy_atom, 1, 'success']
+                data = [receptor, chain, resnum, resname, heavy_atom, 1, 'success']                                     # data = success_message
                 data = [data]
                 db.insert(table_sn, data)
             except Exception as e:
-                data =  [receptor, chain, resnum, resname, 0, 0, str(e)]
+                data =  [receptor, chain, resnum, resname, 0, 0, str(e)]                                                # data = failure_message
                 data = [data]
                 db.insert(table_sn, data)
 
@@ -92,23 +93,22 @@ def split_ligand(table_sn, param, datum):
         print e
         raise Exception(str(e))
 
-def split_receptor(table_sn, param, datum):
-    try:
+def split_receptor(table_sn, param, datum):                                                                             # param = params;
+    try:                                                                                                                # datum = pdb_name
         if type(datum).__name__ in ['tuple','list']:
             datum = datum[0]
 
-        receptor = datum
+        receptor = datum                                                                                                # receptor = pdb_name
         folder = param['folder']
         folder = '{}_{}'.format(table_sn, folder)
         download_folder = param['download_folder']
         
-        pdb_dir = os.path.join(data_dir,download_folder)
+        pdb_dir = os.path.join(data_dir,download_folder)                                                                # pdb_dir = input_dir
         pdb_path = os.path.join(pdb_dir, receptor+'.pdb')
         
         parsed = prody.parsePDB(pdb_path)
         header = prody.parsePDBHeader(pdb_path)
-        
-        
+
         rec_dir = os.path.join(data_dir, folder, receptor)
         _makedir(rec_dir)
 
@@ -126,11 +126,11 @@ def split_receptor(table_sn, param, datum):
                 prody.writePDB(os.path.join(rec_dir, rec_name), rec)
 
 
-                datum = [receptor, chain, resnum, resname, heavy_atom, header['experiment'], header['resolution'] , 1 , 'success']
+                datum = [receptor, chain, resnum, resname, heavy_atom, header['experiment'], header['resolution'] , 1 , 'success'] # datum = success_message
                 data = [datum]
                 db.insert(table_sn, data)
             except Exception as e:
-                datum = [receptor, chain, resnum, resname, 0, 0, str(e)]
+                datum = [receptor, chain, resnum, resname, 0, 0, str(e)]                                                # datum = failure_message
                 data = [datum]
                 db.insert(table_sn, data) 
 
@@ -138,7 +138,7 @@ def split_receptor(table_sn, param, datum):
         print e
         raise Exception(str(e))
 
-def reorder(table_sn, param, datum):
+def reorder(table_sn, param, datum):                                                                                    # reorder = vina_reorder; param = params; datum = ligand_name
     try:
         receptor, chain, resnum, resname = datum
         
@@ -154,11 +154,11 @@ def reorder(table_sn, param, datum):
         out_name = '_'.join(datum +  ['ligand']) + '.pdb'
         out_path = os.path.join(out_dir, out_name)
 
-        lig_dir = os.path.join(data_dir, lig_folder , receptor)
+        lig_dir = os.path.join(data_dir, lig_folder , receptor)                                                         # lig_dir = input_lig_dir
         lig_name = '_'.join(datum + ['ligand']) + '.pdb'
         lig_path = os.path.join(lig_dir, lig_name)
 
-        rec_dir = os.path.join(data_dir, rec_folder, receptor)
+        rec_dir = os.path.join(data_dir, rec_folder, receptor)                                                          # rec_dir = input_rec_dir
         rec_name = '_'.join(datum + ['receptor']) + '.pdb'
         rec_path = os.path.join(rec_dir, rec_name)
 
@@ -171,12 +171,12 @@ def reorder(table_sn, param, datum):
 
 
         cmd = smina_pm.make_command(**kw)
-        print cmd
+        print cmd                                                                                                       # print "smina parameters for reordering:', cmd
         cl = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
         cl.wait()
         prody.parsePDB(out_path)
 
-        datum = datum + [ 1, 'success']
+        datum = datum + [ 1, 'success']                                                                                 # datum = success_message
         data = [datum]
         db.insert(table_sn, data)
 
@@ -189,7 +189,7 @@ def smina_dock(table_sn,param, datum):
     try:
         receptor, chain, resnum, resname = datum
         
-        folder = param['folder']
+        folder = param['folder']                                                                                        # folder = output_folder
         folder = '{}_{}'.format(table_sn, folder)
         lig_folder = param['ligand_folder']
         rec_folder = param['receptor_folder']
@@ -201,7 +201,7 @@ def smina_dock(table_sn,param, datum):
         out_name = '_'.join(datum +  ['ligand']) + '.pdb'
         out_path = os.path.join(out_dir, out_name)
 
-        lig_dir = os.path.join(data_dir, lig_folder , receptor)
+        lig_dir = os.path.join(data_dir, lig_folder , receptor)                                                         # lig_dir = input_lig_dir
         lig_name = '_'.join(datum + ['ligand']) + '.pdb'
         lig_path = os.path.join(lig_dir, lig_name)
 
@@ -232,14 +232,14 @@ def smina_dock(table_sn,param, datum):
         data = [datum]
         db.insert(table_sn, data)
 
-def overlap(table_sn, param, datum):
+def overlap(table_sn, param, datum):                                                                                    # a prticularly bad datum
 
     try:
         receptor, chain, resnum, resname =datum
         docked_folder = param['docked_folder']
         crystal_folder = param['crystal_folder']
-        clash_cutoff_A = param['clash_cutoff_A']
-        clash_size_cutoff = param['clash_size_cutoff']
+        clash_cutoff_A = param['clash_cutoff_A']                                                                        #
+        #clash_size_cutoff                                                                                              # make sure we compute a real number
 
 
         lig_name = '_'.join([receptor, chain, resnum, resname, 'ligand']) + '.pdb'
@@ -249,17 +249,22 @@ def overlap(table_sn, param, datum):
         crystal_dir = os.path.join(data_dir,crystal_folder, receptor)
         crystal_path = os.path.join(crystal_dir, lig_name)
 
-        docked = prody.parsePDB(docked_path).getCoordsets()
-        crystal = prody.parsePDB(crystal_path).getCoords()
+        docked = prody.parsePDB(docked_path).getCoordsets()                                                             # docked = docked_coords
+        crystal = prody.parsePDB(crystal_path).getCoords()                                                              # crystal = prody_crystal
+                                                                                                                        # the reason is to know that this thing is an object
         
-        expanded_docked = np.expand_dims(docked, -2)
-        diff = expanded_docked - crystal
-        distance = np.sqrt(np.sum(np.power(diff, 2), axis=-1))
-        all_clash = (distance < config.clash_cutoff_A).astype(float)
-        atom_clash = (np.sum(all_clash, axis=-1) > 0).astype(float)
-        position_clash = np.mean(atom_clash, axis=-1) > config.clash_size_cutoff
-        position_clash_ratio = np.mean(atom_clash, axis=-1)
+        expanded_docked = np.expand_dims(docked, -2)                                                                    # 1
+        diff = expanded_docked - crystal                                                                                # 2
+        distance = np.sqrt(np.sum(np.power(diff, 2), axis=-1))                                                          # 3 in one line
 
+
+                                                                                                                        # !!!!!! Formula is not correct
+                                                                                                                        # sum = min
+        all_clash = (distance < config.clash_cutoff_A).astype(float)                                                    #1
+        atom_clash = (np.sum(all_clash, axis=-1) > 0).astype(float)                                                     #2
+#        position_clash = np.mean(atom_clash, axis=-1) > config.clash_size_cutoff
+        position_clash_ratio = np.mean(atom_clash, axis=-1)                                                             #3 : 1,2,3 in one line
+                                                                                                                        # position_clash_ratio = clash_ration
         data = []
         for i, ratio in enumerate(position_clash_ratio):
             data.append(datum+[i+1,ratio, 1, 'success'])
@@ -269,7 +274,7 @@ def overlap(table_sn, param, datum):
     except Exception as e:
         datum = datum + [ 1, 0, 0, str(e)]
         data = [datum]
-        db.insert(table_sn, data)
+        db.insert(table_sn, data)                                                                                       # failure mssg
 
 def rmsd(table_sn, param, datum):
     

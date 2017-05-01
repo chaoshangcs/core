@@ -72,6 +72,22 @@ process_num = 8
 
 # 6) How do we do this on Orchestra or Bridges -- how do we launch many separate jobs ?
 
+
+
+# __________________________________ Review 3 ___________________________________________________
+# todo(maksym) - split we should be able to allow peptides as well
+# todo(maksym) - test how many ligands in the initial
+
+# raviables to rename/describe
+# tanimoto_cutoff = 0.75
+# clash_cutoff_A = 4
+# clash_size_cutoff = 0.3
+# reorder_pm
+# remove duplicate default parameters
+# datum = [table_name, table_type, table_sn, create_time, encoded_param]
+# data = [datum]
+
+
 """
 overlap detaction constant
 """
@@ -87,15 +103,15 @@ Folders
 script_path = sys.path[0]
 #base folder for all the output
 #database_root = os.path.join(script_path, '..', 'AffinityDB')
-database_root = '/home/xander/affinityDB/test_v2'
+database_root = '/home/maksym/PyCharmProjects/datasets/affinity_DB_v2'
 
 db_path =os.path.join(database_root, db_name)
 
 data_dir = os.path.join(database_root,'data')
 # log files
-log_dir = os.path.join(database_root, 'log')
+#log_dir = os.path.join(database_root, 'log')
 # csv files
-table_dir = os.path.join(database_root, 'table')
+#table_dir = os.path.join(database_root, 'table')
 
 
 """
@@ -104,11 +120,11 @@ File Path
 
 # path of smina binary file
 #smina = 'smina.static'
-smina = '/home/xander/Program/smina/smina.static'
+smina = '/usr/local/bin/smina'
 
 # pdb_target_list
 #list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
-list_of_PDBs_to_download = '/home/xander/affinityDB/target_list/small_list.txt'
+list_of_PDBs_to_download = '/home/maksym/PyCharmProjects/tensorMe21_Database/AffinityDB/target_list/maksym_test.txt'
 
 # example scoring
 scoring_terms = os.path.join(sys.path[0], 'scoring', 'smina.score')
