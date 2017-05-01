@@ -87,7 +87,7 @@ Folders
 script_path = sys.path[0]
 #base folder for all the output
 #database_root = os.path.join(script_path, '..', 'AffinityDB')
-database_root = '/home/xander/affinityDB/test_v2'
+database_root = '/home/xander/affinityDB/aff_test'
 
 db_path =os.path.join(database_root, db_name)
 
@@ -108,7 +108,7 @@ smina = '/home/xander/Program/smina/smina.static'
 
 # pdb_target_list
 #list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
-list_of_PDBs_to_download = '/home/xander/affinityDB/target_list/small_list.txt'
+list_of_PDBs_to_download = '/home/xander/affinityDB/aff_test/affinity_test.txt'
 
 # example scoring
 scoring_terms = os.path.join(sys.path[0], 'scoring', 'smina.score')
@@ -191,4 +191,8 @@ native_contact_pm = {
 
 native_contace_default = {
     'distance_threshold':4.0
+}
+
+binding_affinity_files = {
+    'pdbbind':'/home/xander/data/PDBbind/indexs/index/INDEX_general_PL.2016'
 }

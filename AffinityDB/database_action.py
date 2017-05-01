@@ -16,6 +16,7 @@ import prody
 import config
 from config import data_dir
 from db_v2 import AffinityDatabase
+from parse_binding_DB import read_PDB_bind
 
 db = AffinityDatabase()
 
@@ -138,6 +139,16 @@ def split_receptor(table_sn, param, datum):
         print e
         raise Exception(str(e))
 
+def lig_fit(table_sn, param, datum):
+    try:
+        receptor, chain, resnum, resname = datum
+
+        lig_folder = param['ligand_folder']
+        box_size = param['box_size']
+        lig = np.load
+    except:
+        pass
+
 def reorder(table_sn, param, datum):
     try:
         receptor, chain, resnum, resname = datum
@@ -223,19 +234,19 @@ def smina_dock(table_sn,param, datum):
         cl.wait()
         prody.parsePDB(out_path)
 
-        datum = datum + [ 1, 'success']
+        datum = datum + [1, 'success']
         data = [datum]
         db.insert(table_sn, data)
 
     except Exception as e:
-        datum = datum + [ 0, str(e)]
+        datum = datum + [0, str(e)]
         data = [datum]
         db.insert(table_sn, data)
 
 def overlap(table_sn, param, datum):
 
     try:
-        receptor, chain, resnum, resname =datum
+        receptor, chain, resnum, resname = datum
         docked_folder = param['docked_folder']
         crystal_folder = param['crystal_folder']
         clash_cutoff_A = param['clash_cutoff_A']
@@ -246,12 +257,12 @@ def overlap(table_sn, param, datum):
         docked_dir = os.path.join(data_dir, docked_folder, receptor)
         docked_path = os.path.join(docked_dir, lig_name)
 
-        crystal_dir = os.path.join(data_dir,crystal_folder, receptor)
+        crystal_dir = os.path.join(data_dir, crystal_folder, receptor)
         crystal_path = os.path.join(crystal_dir, lig_name)
 
         docked = prody.parsePDB(docked_path).getCoordsets()
         crystal = prody.parsePDB(crystal_path).getCoords()
-        
+
         expanded_docked = np.expand_dims(docked, -2)
         diff = expanded_docked - crystal
         distance = np.sqrt(np.sum(np.power(diff, 2), axis=-1))
@@ -262,12 +273,12 @@ def overlap(table_sn, param, datum):
 
         data = []
         for i, ratio in enumerate(position_clash_ratio):
-            data.append(datum+[i+1,ratio, 1, 'success'])
+            data.append(datum+[i+1, ratio, 1, 'success'])
 
         db.insert(table_sn, data)
 
     except Exception as e:
-        datum = datum + [ 1, 0, 0, str(e)]
+        datum = datum + [1, 0, 0, str(e)]
         data = [datum]
         db.insert(table_sn, data)
 
@@ -314,10 +325,10 @@ def native_contact(table_sn, param, datum):
         docked_dir = os.path.join(data_dir, docked_folder, receptor)
         docked_path = os.path.join(docked_dir, lig_name)
 
-        crystal_dir = os.path.join(data_dir, crystal_folder , receptor)
+        crystal_dir = os.path.join(data_dir, crystal_folder, receptor)
         crystal_path = os.path.join(crystal_dir, lig_name)
 
-        rec_dir = os.path.join(data_dir, rec_folder ,receptor)
+        rec_dir = os.path.join(data_dir, rec_folder, receptor)
         rec_path = os.path.join(rec_dir, rec_name)
 
         parsed_docked =  prody.parsePDB(docked_path).select('not hydrogen')
@@ -359,6 +370,20 @@ def native_contact(table_sn, param, datum):
         data = [datum]
         db.insert(table_sn, data)
 
+def binding_affinity(table_sn, param, datum):
+    try:
+        pdb_bind_index = param['pdb_bind_index']
+        pdb_bind_index = config.binding_affinity_files[pdb_bind_index]
+        PDB_bind = read_PDB_bind(pdb_bind_index=pdb_bind_index)
+        data = [[PDB_bind.pdb_names[i].upper(), PDB_bind.ligand_names[i],
+                 PDB_bind.log_affinities[i], PDB_bind.normalized_affinities[i],
+                 1, 'success']
+                 for i in range(len(PDB_bind.pdb_names))]
+        #print(data)
+        db.insert(table_sn, data)
+    except Exception as e:
+        print (e)
+
 DatabaseAction={
     'download':download,
     'split_ligand':split_ligand,
@@ -367,5 +392,6 @@ DatabaseAction={
     'smina_dock':smina_dock,
     'overlap':overlap,
     'rmsd':rmsd,
-    'native_contact':native_contact
+    'native_contact':native_contact,
+    'binding_affinity':binding_affinity
 }

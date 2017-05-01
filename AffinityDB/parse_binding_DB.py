@@ -77,6 +77,7 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
                 log_affinity = np.log(float(affinity_number)) - np.log(10.0 ** 3)
             PDB_bind.log_affinities.append(log_affinity)
 
+
         except Exception as e:
             PDB_bind.num_exceptions += 1
             PDB_bind.exceptions.append(e)
@@ -87,7 +88,9 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
     print "parsing finished. num records:",PDB_bind.num_records,"num exceptions:",PDB_bind.num_exceptions
     return PDB_bind
 
-PDB_bind = read_PDB_bind()
 
-for i in range(len(PDB_bind.pdb_names)):
-    print PDB_bind.pdb_names[i],PDB_bind.ligand_names[i],PDB_bind.normalized_affinities[i]
+if __name__ == '__main__':
+    PDB_bind = read_PDB_bind()
+
+    for i in range(len(PDB_bind.pdb_names)):
+        print PDB_bind.pdb_names[i],PDB_bind.ligand_names[i],PDB_bind.normalized_affinities[i]

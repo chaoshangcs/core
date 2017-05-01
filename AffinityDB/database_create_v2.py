@@ -28,6 +28,7 @@ def get_arguments():
     parser.add_argument('--delete',dest='db_delete', action='store_true')
     parser.add_argument('--progress', dest='db_progress', action='store_true')
     parser.add_argument('--action', type=str)
+    parser.add_argument('--param', type=str)
     parser.add_argument('--dock_param', type=str, default='vinardo')
     parser.add_argument('--overlap_param', type=str, default='default')
     parser.add_argument('--native_contact_param', type=str, default='default')
@@ -51,7 +52,7 @@ def run_multiprocess(target_list, func):
             target_list = list(target_list)
         else:
             target_list = map(list, target_list)
-
+        print (len(target_list))
         pool = multiprocessing.Pool(config.process_num)
         pool.map_async(func, target_list)
         pool.close()
@@ -155,6 +156,18 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         total = len(set(rec_list) & set(cry_list) & set(doc_list))
         finished = len(set(finished_list)- set(failed_list))
         failed = len(set(failed_list))
+    elif func_name == 'binding_affinity':
+        
+        finished_list = db.get_all_success(table_sn)
+        failed_list = db.get_all_failed(table_sn)
+
+        total = len(set(finished_list) | set(failed_list))
+        finished = len(set(finished_list) - set(failed_list))
+        failed = len(set(failed_list))
+
+        # binding affinity finished at the first time it launched
+        # no rest entry left to continue
+        rest_list = [[]]
 
     else:
         raise Exception("unknown func_name %s" % func_name)
@@ -338,6 +351,19 @@ def db_create():
             'distance_threshold': 4.0
         }
 
+    elif FLAGS.action == 'binding_affinity':
+        if FLAGS.param is None:
+            raise Exception('param required')
+
+        param = FLAGS.param
+        if not param in config.binding_affinity_files.keys():
+            raise Exception('No binidng affinity file for key {} in config\n'.format(param)\
+                             + 'Available choices are {}'.format(str(config.binding_affinity_files.keys())))
+
+        table_param = {
+            'func':'binding_affinity',
+            'pdb_bind_index':param
+        }
 
     else:
         raise Exception("Doesn't support action {}".format(FLAGS.action))
