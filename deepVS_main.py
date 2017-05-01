@@ -31,7 +31,7 @@ def train():
     tf.summary.scalar('cross entropy mean', cross_entropy_mean)
 
     # Adam optimizer is a very heart of the network
-    train_step_run = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    train_step_run = tf.train.AdamOptimizer(learning_rate=1e-5).minimize(cross_entropy)
     
     # merge all summaries and create a file writer object
     merged_summaries = tf.summary.merge_all()
@@ -51,23 +51,24 @@ def train():
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
-    avg_error = 0
+    mem_of_entropy = []
 
     while True:
         start = time.time()
         batch_num = sess.run(batch_counter_increment)
 
         epo,c_entropy_mean,_ = sess.run([current_epoch,cross_entropy_mean,train_step_run], feed_dict={keep_prob: 0.5})
-        avg_error = (avg_error*batch_num + c_entropy_mean) / (batch_num + 1)
+        mem_of_entropy.append(c_entropy_mean)
 
         if (batch_num % 100 == 99):
-            print "epoch:",epo,"global step:", batch_num, "\tcross entropy mean:", c_entropy_mean,
+            print "epoch:",epo,"global step:", batch_num, "\tentropy:", c_entropy_mean, "\entropy average:", np.average(mem_of_entropy[-1000:]),
             print "\texamples per second:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
 
         if (batch_num % 10000 == 9999):
             # once in a while save the network state and write variable summaries to disk
             summaries = sess.run(merged_summaries, feed_dict={keep_prob:1})
-            print 'average cross entropy mean:' avg_error
+            mem_of_entropy = mem_of_entropy[-1000:]
+            print 'saving to disk...'
             train_writer.add_summary(summaries, batch_num)
             saver.save(sess, FLAGS.summaries_dir + '/' + str(FLAGS.run_index) + "_netstate/saved_state", global_step=batch_num)
 
