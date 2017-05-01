@@ -563,7 +563,21 @@ $ squeue -u korablyo
 
 ```
 
-### Example scrip for running job on xstream
+### Running job on xstream
+login to Bridges through XSEDE Single Sign-On (SSO) Hub.
+```bash
+ssh [xsede_username]@login.xsede.org
+```
+login xstream
+```bash
+gsissh xstream
+```
+work directory
+```bash
+cd $WORK
+```
+
+### example slurm script
 ```bash
 #!/bin/bash
 #
@@ -572,9 +586,9 @@ $ squeue -u korablyo
 #
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=5
-#SBATCH --mem-per-cpu=10000
-#SBATCH --gres gpu:4
+#SBATCH --cpus-per-task=4
+#SBATCH --mem-per-cpu=1000
+#SBATCH --gres gpu:2
 #SBATCH --gres-flags=enforce-binding
 
 module load foss/2015.05
