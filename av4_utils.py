@@ -194,7 +194,7 @@ def deep_affine_transform(coords,deep_transition_matrix):
 
 
 
-def generate_exhaustive_affine_transform(shift_ranges=[9,9,9],shift_deltas=[3,3,3],rot_ranges=[360,360,360]):
+def generate_exhaustive_affine_transform(shift_ranges=[10,10,10],shift_deltas=[1,1,1],rot_ranges=[360,360,360]):
     """By default,makes shifts by 1, in X,Y,Z directions"""
 
     # shift along X,Y,Z
