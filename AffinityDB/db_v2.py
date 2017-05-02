@@ -12,7 +12,8 @@ import time
 from config import lock 
 from utils import lockit, param_equal 
 import csv 
-import numpy as np 
+import numpy as np
+import pandas as pd
 from collections import namedtuple, OrderedDict, Counter
 from database_table_v2 import basic_tables, tables
 
@@ -60,32 +61,32 @@ class AffinityDatabase:
         self.connect_db()
         self.init_table()
 
-    def get_new_table_sn(self):
-        stmt = 'select table_sn from db_info;'
+    def new_table_idx(self):
+        stmt = 'select table_idx from db_info;'
         cursor = self.conn.cursor()
         cursor.execute(stmt)
         values = cursor.fetchall()
         values = map(lambda x:x[0], values)
         if len(values) == 0:
-            sn = 1
+            idx = 1
         elif not len(values) == max(values):
             rest =  list(set(range(1, max(values))) - set(values))
-            sn = rest[0]
+            idx = rest[0]
         else:
-            sn = max(values) + 1
+            idx = max(values) + 1
     
-        return sn
+        return idx
 
     def create_table(self, table_type, table_param):
         
-        table_sn = self.get_new_table_sn()
-        table_name = '{}_{}'.format(table_type, table_sn)
+        table_idx = self.new_table_idx()
+        table_name = '{}_{}'.format(table_type, table_idx)
         tab = self.tables[table_type]
 
         encoded_param = base64.b64encode(json.dumps(table_param))
         create_time = time.strftime("%Y-%m-%d", time.gmtime())
 
-        datum = [table_name, table_type, table_sn, create_time, encoded_param]
+        datum = [table_name, table_type, table_idx, create_time, encoded_param]
         data = [datum]
         self.insert('db_info',data)
 
@@ -101,33 +102,33 @@ class AffinityDatabase:
 
         if 'depend' in table_param.keys():
             depend_tables = table_param['depend']
-            for tab_sn in depend_tables:
-                self.insert('dependence',[[tab_sn, table_sn]])
+            for tab_idx in depend_tables:
+                self.insert('dependence',[[tab_idx, table_idx]])
 
         self.conn.commit()
 
-        return table_sn
+        return table_idx
 
-    def get_table_name_by_sn(self, sn):
-        sn = int(sn)
+    def get_table_name_by_sn(self, idx):
+        idx = int(idx)
         cursor = self.conn.cursor()
-        stmt = 'select name from db_info where table_sn=%d;' % sn 
+        stmt = 'select name from db_info where table_idx=%d;' % idx
         cursor.execute(stmt)
         value = cursor.fetchone()
         if value is None:
-            raise Exception("No table with sn number %d" %sn)
+            raise Exception("No table with idx: {}".format(idx))
         else:
             return value[0]
 
-    def get_table(self, sn, with_param=True):
-        sn = int(sn)
+    def get_table(self, idx, with_param=True):
+        idx = int(idx)
         cursor = self.conn.cursor()
-        stmt = 'select name, parameter from db_info where table_sn=%d;' % sn
+        stmt = 'select name, parameter from db_info where table_idx=%d;' % idx
         cursor.execute(stmt)
         value = cursor.fetchone()
 
         if value is None:
-            raise Exception("No table with sn number {}".format(sn))
+            raise Exception("No table with idx: {}".format(idx))
         else:
             table_name, coded_param = value 
             
@@ -137,23 +138,23 @@ class AffinityDatabase:
             else:
                 return table_name 
 
-    def get_folder(self, sn):
-        sn = int(sn)
-        table_name, table_param = self.get_table(sn)
+    def get_folder(self, idx):
+        idx = int(idx)
+        table_name, table_param = self.get_table(idx)
         
-        if not 'folder' in table_param.keys():
+        if not 'output_folder' in table_param.keys():
             raise Exception("table {} doesn't have corresponding folder".format(table_name))
         else:
-            return table_param['folder']
+            return table_param['output_folder']
 
-    def delete_table(self, sn):
-        sn = int(sn)
+    def delete_table(self, idx):
+        idx = int(idx)
         # if exists get the ble_name and table_taparam
-        table_name, table_param = self.get_table(sn)
+        table_name, table_param = self.get_table(idx)
 
         # delete all table depend on it
         cursor = self.conn.cursor()
-        stmt = 'select dest from dependence where source=%d;' % sn
+        stmt = 'select dest from dependence where source=%d;' % idx
         cursor.execute(stmt)
         values = cursor.fetchall()
         if values:
@@ -161,11 +162,11 @@ class AffinityDatabase:
                 self.delete_table(val)
 
         # delete from dependence
-        stmt = 'delete from dependence where source=%d' % sn
+        stmt = 'delete from dependence where source=%d' % idx
         cursor.execute(stmt)
 
         # delete from db_info
-        stmt = 'delete from db_info where table_sn=%d;' % sn
+        stmt = 'delete from db_info where table_idx=%d;' % idx
         cursor.execute(stmt)
 
         # drop table
@@ -175,7 +176,7 @@ class AffinityDatabase:
         self.conn.commit()
         # if have data with this table remove relative data
         if 'folder' in table_param.keys():
-            folder_name = '{}_{}'.format(sn, table_param['folder'])
+            folder_name = '{}_{}'.format(idx, table_param['folder'])
             del_folder_name = 'del_' + folder_name
             folder_dir = os.path.join(config.data_dir, folder_name)
             del_folder_dir = os.path.join(config.data_dir, del_folder_name)
@@ -212,42 +213,63 @@ class AffinityDatabase:
         self.conn.execute(stmt)
         self.conn.commit()
 
-    def primary_key_for(self, sn):
-        sn = int(sn)
-        stmt = 'select type from db_info where table_sn=%d;' % sn
+    def primary_key_for(self, idx):
+        idx = int(idx)
+        stmt = 'select type from db_info where table_idx=%d;' % idx
         cursor = self.conn.cursor()
         cursor.execute(stmt)
         value = cursor.fetchone()
 
         if value is None:
-            raise Exception("No table with sn number %d" %sn)
+            raise Exception("No table with idx: {}".format(idx))
         else:
             table_type = value[0]
             return tables[table_type].primary_key
 
-    def get_all_success(self, sn):
-        sn = int(sn)
-        table_name = self.get_table(sn, with_param=False)
-        primary_key = self.primary_key_for(sn)
+
+
+    def get_primary_columns_on_key(self, idx, kw):
+        idx = int(idx)
+        table_name = self.get_table(idx, with_param=False)
+        primary_key = self.primary_key_for(idx)
+        stmt = 'select ' + ','.join(primary_key) + ' from ' + table_name
+        stmt += ' where '
+        stmt += ' and '.join(['{}={}'.format(key, kw[key]) for key in kw.keys()])
+        stmt += ';'
+
+        cursor = self.conn.cursor()
+        cursor.execute(stmt)
+        values = cursor.fetchall()
+        return values
+
+    def get_all_success(self, idx):
+        '''
+        idx = int(idx)
+        table_name = self.get_table(idx, with_param=False)
+        primary_key = self.primary_key_for(idx)
         stmt = 'select ' + ','.join(primary_key) + ' from ' + table_name
         stmt += ' where state=1;'
         cursor = self.conn.cursor()
         cursor.execute(stmt)
         values = cursor.fetchall()
-        return values
+        '''
+        return self.get_primary_columns_on_key(idx, {'state':1})
 
-    def get_all_failed(self, sn):
-        sn = int(sn)
-        table_name = self.get_table(sn, with_param=False)
-        primary_key =  self.primary_key_for(sn)
+    def get_all_failed(self, idx):
+        '''
+        idx = int(idx)
+        table_name = self.get_table(idx, with_param=False)
+        primary_key =  self.primary_key_for(idx)
         stmt = 'select ' + ','.join(primary_key) + ' from ' + table_name
         stmt += ' where state=0;'
         cursor = self.conn.cursor()
         cursor.execute(stmt)
         values = cursor.fetchall()
-        return values
+        '''
+        return self.get_primary_columns_on_key(idx, {'state':0})
 
-    def get_all_sns(self):
+
+    def get_all_dix(self):
         
         stmt = 'select table_sn from db_info;'
         cursor = self.conn.cursor()
@@ -256,7 +278,7 @@ class AffinityDatabase:
         values = map(lambda x:x[0], values)
         return values
 
-    def get_sns_by_type(self, table_type):
+    def get_dix_by_type(self, table_type):
         
         stmt = 'select table_sn from db_info '
         stmt += ' where type="%s";' % table_type
@@ -267,9 +289,9 @@ class AffinityDatabase:
         return values
 
 
-    def get_success_data(self, sn, dataframe=False):
-        sn = int(sn)
-        table_name, table_param = self.get_table(sn, with_param=True)
+    def get_success_data(self, idx, dataframe=False):
+        idx = int(idx)
+        table_name, table_param = self.get_table(idx, with_param=True)
         stmt = 'select * from ' + table_name 
         stmt += ' where state=1'
         cursor = self.conn.cursor()
@@ -287,9 +309,9 @@ class AffinityDatabase:
         else:
             return (table_name, table_param, columns,  values)
 
-    def get_failed_reason(self, sn ):
-        sn = int(sn)
-        table_name = self.get_table(sn, with_param=False)
+    def get_failed_reason(self, idx):
+        idx = int(idx)
+        table_name = self.get_table(idx, with_param=False)
         stmt = 'select comment from ' + table_name
         stmt += ' where state=0;'
         cursor = self.conn.cursor()
@@ -300,11 +322,7 @@ class AffinityDatabase:
         df = pd.DataFrame(reason_n, columns=['reason','count'])
         return (table_name, df)
         
-        
-    def get_param(self, sn):
-        sn = int(sn)
-        table_name, param = self.get_table(sn)
-        
+
 
     def init_table(self):
         print 'init'

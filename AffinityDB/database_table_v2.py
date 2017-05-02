@@ -34,12 +34,12 @@ basic_tables = {
                         [
                             ('name','text'),
                             ('type','text'),
-                            ('table_sn','integer'),
+                            ('table_idx','integer'),
                             ('create_time','text'),
                             ('parameter','text')
                         ]
                     ),
-                    ['table_sn']]),
+                    ['table_idx']]),
 }
 
 
@@ -63,6 +63,7 @@ tables = {
                             ('resnum','text'),
                             ('resname','text'),
                             ('heavy_atom','integer'),
+                            ('fit_in_box', 'integer'),
                             ('state','integer'),
                             ('comment','text')
                         ]

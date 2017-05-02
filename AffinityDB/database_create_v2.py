@@ -4,6 +4,7 @@ import os
 import sys
 import re
 import time
+import pprint
 import argparse
 import subprocess
 import multiprocessing
@@ -27,19 +28,17 @@ def get_arguments():
     parser.add_argument('--continue',dest='db_continue', action='store_true')
     parser.add_argument('--delete',dest='db_delete', action='store_true')
     parser.add_argument('--progress', dest='db_progress', action='store_true')
+    parser.add_argument('--list_param', dest='db_param',action='store_true')
     parser.add_argument('--action', type=str)
     parser.add_argument('--param', type=str)
-    parser.add_argument('--dock_param', type=str, default='vinardo')
-    parser.add_argument('--overlap_param', type=str, default='default')
-    parser.add_argument('--native_contact_param', type=str, default='default')
     parser.add_argument('--retry_failed', action='store_true')
     parser.add_argument('--folder_name', type=str)
-    parser.add_argument('--table_sn', type=int)
-    parser.add_argument('--receptor_sn', type=int)
-    parser.add_argument('--ligand_sn', type=int)
-    parser.add_argument('--crystal_sn', type=int)
-    parser.add_argument('--docked_sn', type=int)
-    parser.add_argument('--download_sn', type=int)
+    parser.add_argument('--table_idx', type=int)
+    parser.add_argument('--receptor_idx', type=int)
+    parser.add_argument('--ligand_idx', type=int)
+    parser.add_argument('--crystal_idx', type=int)
+    parser.add_argument('--docked_idx', type=int)
+    parser.add_argument('--download_idx', type=int)
 
     FLAGS, unparsed = parser.parse_known_args()
     return FLAGS
@@ -64,12 +63,12 @@ def run_multiprocess(target_list, func):
     
 
 
-def get_job_data(func_name, table_sn, table_param, progress=False):
+def get_job_data(func_name, table_idx, table_param, progress=False):
     
     if func_name == 'download':
         download_list = open(config.list_of_PDBs_to_download).readline().strip().split(', ')
-        finished_list = db.get_all_success(table_sn)
-        failed_list = db.get_all_failed(table_sn)
+        finished_list = db.get_all_success(table_idx)
+        failed_list = db.get_all_failed(table_idx)
         if FLAGS.retry_failed:
             rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
         else:
@@ -80,12 +79,12 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         failed = len(set(failed_list))
 
     elif func_name in ['split_ligand','split_receptor']:
-        download_sn = table_param['download_sn']
-        download_list = db.get_all_success(download_sn)
+        download_idx = table_param['download_idx']
+        download_list = db.get_all_success(download_idx)
 
-        finished_list = db.get_all_success(table_sn)
+        finished_list = db.get_all_success(table_idx)
         finished_list = map(lambda x:(x[0],),finished_list)
-        failed_list = db.get_all_failed(table_sn)
+        failed_list = db.get_all_failed(table_idx)
         failed_list = map(lambda x:(x[0],), failed_list)
         if FLAGS.retry_failed:
             rest_list = list(set(download_list) - set(finished_list) | set(failed_list))
@@ -97,33 +96,33 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         failed = len(set(failed_list))
 
     elif func_name in ['reorder', 'dock']:
-        rec_sn = table_param['receptor_sn']
-        rec_list = db.get_all_success(rec_sn)
+        rec_idx = table_param['receptor_idx']
+        rec_list = db.get_all_success(rec_idx)
 
-        lig_sn = table_param['ligand_sn']
-        lig_list = db.get_all_success(lig_sn)
+        lig_idx = table_param['ligand_idx']
+        lig_list = db.get_all_success(lig_idx)
 
-        finished_list = db.get_all_success(table_sn)
-        failed_list = db.get_all_failed(table_sn)
+        finished_list = db.get_all_success(table_idx)
+        failed_list = db.get_all_failed(table_idx)
         if FLAGS.retry_failed:
             rest_list = list(set(rec_list) & set(lig_list) - set(finished_list) | set(failed_list))
         else:
-            rest_lsit = list(set(rec_list) & set(lig_list) - set(finished_list) - set(failed_list))
+            rest_list = list(set(rec_list) & set(lig_list) - set(finished_list) - set(failed_list))
 
         total = len(set(rec_list) & set(lig_list))
         finished = len(set(finished_list)-set(failed_list))
         failed = len(set(failed_list))
 
     elif func_name in ['rmsd', 'overlap']:
-        cry_sn = table_param['crystal_sn']
-        cry_list = db.get_all_success(cry_sn)
+        cry_idx = table_param['crystal_idx']
+        cry_list = db.get_all_success(cry_idx)
 
-        doc_sn = table_param['docked_sn']
-        doc_list = db.get_all_success(doc_sn)
+        doc_idx = table_param['docked_idx']
+        doc_list = db.get_all_success(doc_idx)
 
-        finished_list = db.get_all_success(table_sn)
+        finished_list = db.get_all_success(table_idx)
         finished_list = map(lambda x: x[:-1], finished_list)
-        failed_list = db.get_all_failed(table_sn)
+        failed_list = db.get_all_failed(table_idx)
         failed_list = map(lambda x: x[:-1], failed_list)
         if FLAGS.retry_failed:
             rest_list = list(set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
@@ -135,18 +134,18 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         failed = len(set(failed_list))
 
     elif func_name == 'native_contact':
-        rec_sn = table_param['receptor_sn']
-        rec_list = db.get_all_success(rec_sn)
+        rec_idx = table_param['receptor_idx']
+        rec_list = db.get_all_success(rec_idx)
 
-        cry_sn = table_param['crystal_sn']
-        cry_list = db.get_all_success(cry_sn)
+        cry_idx = table_param['crystal_idx']
+        cry_list = db.get_all_success(cry_idx)
 
-        doc_sn = table_param['docked_sn']
-        doc_list = db.get_all_success(doc_sn)
+        doc_idx = table_param['docked_idx']
+        doc_list = db.get_all_success(doc_idx)
 
-        finished_list = db.get_all_success(table_sn)
+        finished_list = db.get_all_success(table_idx)
         finished_list = map(lambda x: x[:-1], finished_list)
-        failed_list = db.get_all_failed(table_sn)
+        failed_list = db.get_all_failed(table_idx)
         failed_list = map(lambda x: x[:-1], failed_list)
         if FLAGS.retry_failed:
             rest_list = list(set(rec_list) & set(cry_list) & set(doc_list) - set(finished_list) | set(failed_list))
@@ -158,8 +157,8 @@ def get_job_data(func_name, table_sn, table_param, progress=False):
         failed = len(set(failed_list))
     elif func_name == 'binding_affinity':
         
-        finished_list = db.get_all_success(table_sn)
-        failed_list = db.get_all_failed(table_sn)
+        finished_list = db.get_all_success(table_idx)
+        failed_list = db.get_all_failed(table_idx)
 
         total = len(set(finished_list) | set(failed_list))
         finished = len(set(finished_list) - set(failed_list))
@@ -185,7 +184,7 @@ def db_create():
         folder_name = FLAGS.folder_name
         table_param = {
             'func':'download',
-            'folder': folder_name,
+            'output_folder': folder_name,
         }
 
 
@@ -196,32 +195,32 @@ def db_create():
             raise Exception('download_sn required')
 
         folder_name = FLAGS.folder_name
-        download_sn = FLAGS.download_sn
-        download_folder = db.get_folder(download_sn)
+        download_idx = FLAGS.download_idx
+        download_folder = db.get_folder(download_idx)
         table_param = {
             'func':'split_receptor',
-            'folder':folder_name,
-            'download_sn':download_sn,
-            'download_folder':'{}_{}'.format(download_sn, download_folder),
-            'depend':[download_sn]
+            'output_folder':folder_name,
+            'download_idx':download_idx,
+            'input_download_folder':'{}_{}'.format(download_idx, download_folder),
+            'depend':[download_idx]
         }
 
 
     elif FLAGS.action == 'split_ligand':
         if FLAGS.folder_name is None:
             raise Exception("folder_name required")
-        if FLAGS.download_sn is None:
-            raise Exception('download_sn required')
+        if FLAGS.download_idx is None:
+            raise Exception('download_idx required')
         
         folder_name = FLAGS.folder_name
-        download_sn = FLAGS.download_sn
-        download_folder = db.get_folder(download_sn)
+        download_idx = FLAGS.download_idx
+        download_folder = db.get_folder(download_idx)
         table_param = {
             'func':'split_ligand',
-            'folder': folder_name,
-            'download_sn': download_sn,
-            'download_folder': '{}_{}'.format(download_sn, download_folder),
-            'depend':[download_sn]
+            'output_folder': folder_name,
+            'download_idx': download_idx,
+            'input_download_folder': '{}_{}'.format(download_idx, download_folder),
+            'depend':[download_idx]
         } 
 
 
@@ -229,24 +228,24 @@ def db_create():
     elif FLAGS.action == 'reorder':
         if FLAGS.folder_name is None:
             raise Exception("folder_name required")
-        if FLAGS.receptor_sn is None:
-            raise Exception('receptor_sn required')
-        if FLAGS.ligand_sn is None:
-            raise Exception('ligand_sn required')
+        if FLAGS.receptor_idx is None:
+            raise Exception('receptor_idx required')
+        if FLAGS.ligand_idx is None:
+            raise Exception('ligand_idx required')
 
         folder_name = FLAGS.folder_name
-        receptor_sn = FLAGS.receptor_sn
-        receptor_folder = db.get_folder(receptor_sn)
-        ligand_sn = FLAGS.ligand_sn
-        ligand_folder = db.get_folder(ligand_sn)
+        receptor_idx = FLAGS.receptor_idx
+        receptor_folder = db.get_folder(receptor_idx)
+        ligand_idx = FLAGS.ligand_idx
+        ligand_folder = db.get_folder(ligand_idx)
         table_param = {
             'func': 'reorder',
-            'folder': folder_name,
-            'receptor_sn':receptor_sn,
-            'receptor_folder':'{}_{}'.format(receptor_sn,receptor_folder),
-            'ligand_sn': ligand_sn,
-            'ligand_folder': '{}_{}'.format(ligand_sn, ligand_folder),
-            'depend':[receptor_sn, ligand_sn],
+            'output_folder': folder_name,
+            'receptor_idx':receptor_idx,
+            'input_receptor_folder':'{}_{}'.format(receptor_idx,receptor_folder),
+            'ligand_idx': ligand_idx,
+            'input_ligand_folder': '{}_{}'.format(ligand_idx, ligand_folder),
+            'depend':[receptor_idx, ligand_idx],
             'smina_param':config.smina_dock_pm['reorder']
         }
 
@@ -254,115 +253,133 @@ def db_create():
     elif FLAGS.action == 'smina_dock':
         if FLAGS.folder_name is None:
             raise Exception("folder_name required")
-        if FLAGS.receptor_sn is None:
+        if FLAGS.receptor_idx is None:
             raise Exception('receptor_sn required')
-        if FLAGS.ligand_sn is None:
+        if FLAGS.ligand_idx is None:
             raise Exception('ligand_sn required')
-        if FLAGS.dock_param is None:
-            raise Exception('dock_param required')
+        if FLAGS.param is None:
+            raise Exception('param required')
 
-        dock_param = FLAGS.dock_param
+        dock_param = FLAGS.param
         if not dock_param in config.smina_dock_pm.keys():
             raise KeyError("dock param {} doesn't exists. ".format(dock_param)\
                             + "available options are: {}".format(', '.join(config.smina_dock_pm.keys())))
         dock_param = config.smina_dock_pm[dock_param]
         folder_name = FLAGS.folder_name
-        receptor_sn = FLAGS.receptor_sn
-        receptor_folder = db.get_folder(receptor_sn)
-        ligand_sn = FLAGS.ligand_sn 
-        ligand_folder = db.get_folder(ligand_sn)
+        receptor_idx = FLAGS.receptor_idx
+        receptor_folder = db.get_folder(receptor_idx)
+        ligand_idx = FLAGS.ligand_idx
+        ligand_folder = db.get_folder(ligand_idx)
         table_param = {
             'func': 'smina_dock',
-            'folder': folder_name,
-            'receptor_sn':receptor_sn,
-            'receptor_folder': '{}_{}'.format(receptor_sn, receptor_folder),
-            'ligand_sn': ligand_sn,
-            'ligand_folder': '{}_{}'.format(ligand_sn, ligand_folder),
-            'depend':[receptor_sn, ligand_sn],
+            'output_folder': folder_name,
+            'receptor_idx':receptor_idx,
+            'input_receptor_folder': '{}_{}'.format(receptor_idx, receptor_folder),
+            'ligand_idx': ligand_idx,
+            'input_ligand_folder': '{}_{}'.format(ligand_idx, ligand_folder),
+            'depend':[receptor_idx, ligand_idx],
             'smina_param':dock_param
         }
 
     
     elif FLAGS.action == 'rmsd':
-        if FLAGS.crystal_sn is None:
-            raise Exception('crystal_sn required')
-        if FLAGS.docked_sn is None:
-            raise Exception('docked_sn required')
+        if FLAGS.crystal_idx is None:
+            raise Exception('crystal_idx required')
+        if FLAGS.docked_idx is None:
+            raise Exception('docked_idx required')
 
-        crystal_sn = FLAGS.crystal_sn
-        crystal_folder = db.get_folder(crystal_sn)
-        docked_sn = FLAGS.docked_sn
-        docked_folder = db.get_folder(docked_sn)
+        crystal_idx = FLAGS.crystal_idx
+        crystal_folder = db.get_folder(crystal_idx)
+        docked_idx = FLAGS.docked_idx
+        docked_folder = db.get_folder(docked_idx)
         table_param = {
             'func':'rmsd',
-            'crystal_sn': crystal_sn,
-            'crystal_folder':'{}_{}'.format(crystal_sn, crystal_folder),
-            'docked_sn': docked_sn,
-            'docked_folder':'{}_{}'.format(docked_sn, docked_folder),
-            'depend':[crystal_sn, docked_sn]
+            'crystal_idx': crystal_idx,
+            'input_crystal_folder':'{}_{}'.format(crystal_idx, crystal_folder),
+            'docked_idx': docked_idx,
+            'input_docked_folder':'{}_{}'.format(docked_idx, docked_folder),
+            'depend':[crystal_idx, docked_idx]
         }
 
 
     elif FLAGS.action == 'overlap':
-        if FLAGS.crystal_sn is None:
-            raise Exception('crystal_sn require')
-        if FLAGS.docked_sn is None:
-            raise Exception('docked_sn required')
+        if FLAGS.crystal_idx is None:
+            raise Exception('crystal_idx require')
+        if FLAGS.docked_idx is None:
+            raise Exception('docked_idx required')
+        if FLAGS.param is None:
+            raise Exception('param required')
+        overlap_param = FLAGS.param
+        if not overlap_param in config.overlap_pm.keys():
+            raise KeyError("dock param {} doesn't exists. ".format(overlap_param) \
+                           + "available options are: {}".format(', '.join(config.overlap_pm.keys())))
 
-        crystal_sn = FLAGS.crystal_sn
-        crystal_folder = db.get_folder(crystal_sn)
-        docked_sn = FLAGS.docked_sn
-        docked_folder = db.get_folder(docked_sn)
+        overlap_param = config.overlap_pm[overlap_param]
+        crystal_idx = FLAGS.crystal_sn
+        crystal_folder = db.get_folder(crystal_idx)
+        docked_idx = FLAGS.docked_sn
+        docked_folder = db.get_folder(docked_idx)
+        
+        
         table_param = {
             'func':'overlap',
-            'crystal_sn': crystal_sn,
-            'crystal_folder':'{}_{}'.format(crystal_sn, crystal_folder),
-            'docked_sn': docked_sn,
-            'docked_folder':'{}_{}'.format(docked_sn, docked_folder),
-            'depend':[crystal_sn, docked_sn],
-            'clash_cutoff_A':4.0,
-            'clash_size_cutoff':0.3
+            'crystal_idx': crystal_idx,
+            'input_crystal_folder':'{}_{}'.format(crystal_idx, crystal_folder),
+            'docked_idx': docked_idx,
+            'input_docked_folder':'{}_{}'.format(docked_idx, docked_folder),
+            'depend':[crystal_idx, docked_idx],
         }
+        table_param.update(overlap_param)
+        
 
 
     elif FLAGS.action == 'native_contact':
-        if FLAGS.receptor_sn is None:
-            raise Exception('receptor_sn required')
-        if FLAGS.crystal_sn is None:
-            raise Exception('crystal_sn require')
-        if FLAGS.docked_sn is None:
-            raise Exception('docked_sn required')
+        if FLAGS.receptor_idx is None:
+            raise Exception('receptor_idx required')
+        if FLAGS.crystal_idx is None:
+            raise Exception('crystal_idx require')
+        if FLAGS.docked_idx is None:
+            raise Exception('docked_idx required')
+        if FLAGS.param is None:
+            raise Exception('param required')
+        native_contact_param = FLAGS.param
+        if not native_contact_param in config.native_contact_pm.keys():
+            raise KeyError("dock param {} doesn't exists. ".format(native_contact_param) \
+                           + "available options are: {}".format(', '.join(config.native_contact_pm.keys())))
 
-        receptor_sn = FLAGS.receptor_sn
-        receptor_folder = db.get_folder(receptor_sn)
-        crystal_sn = FLAGS.crystal_sn
-        crystal_folder = db.get_folder(crystal_sn)
-        docked_sn = FLAGS.docked_sn
-        docked_folder = db.get_folder(docked_sn)
+        native_contact_param = config.overlap_pm[native_contact_param]
+
+        receptor_idx = FLAGS.receptor_idx
+        receptor_folder = db.get_folder(receptor_idx)
+        crystal_idx = FLAGS.crystal_idx
+        crystal_folder = db.get_folder(crystal_idx)
+        docked_idx = FLAGS.docked_sn
+        docked_folder = db.get_folder(docked_idx)
         table_param = {
             'func':'native_contact',
-            'receptor_sn': receptor_sn,
-            'receptor_folder':'{}_{}'.format(receptor_sn, receptor_folder),
-            'crystal_sn': crystal_sn,
-            'crystal_folder':'{}_{}'.format(crystal_sn, crystal_folder),
-            'docked_sn': docked_sn,
-            'docked_folder':'{}_{}'.format(docked_sn, docked_folder),
-            'depend': [receptor_sn, crystal_sn, docked_sn],
-            'distance_threshold': 4.0
+            'receptor_idx': receptor_idx,
+            'input_receptor_folder':'{}_{}'.format(receptor_idx, receptor_folder),
+            'crystal_idx': crystal_idx,
+            'input_crystal_folder':'{}_{}'.format(crystal_idx, crystal_folder),
+            'docked_idx': docked_idx,
+            'input_docked_folder':'{}_{}'.format(docked_idx, docked_folder),
+            'depend': [receptor_idx, crystal_idx, docked_idx],
         }
+
+        table_param.update(native_contact_param)
 
     elif FLAGS.action == 'binding_affinity':
         if FLAGS.param is None:
             raise Exception('param required')
 
-        param = FLAGS.param
-        if not param in config.binding_affinity_files.keys():
-            raise Exception('No binidng affinity file for key {} in config\n'.format(param)\
+        dock_param = FLAGS.param
+        if not dock_param in config.binding_affinity_files.keys():
+            raise Exception('No binidng affinity file for key {} in config\n'.format(dock_param)\
                              + 'Available choices are {}'.format(str(config.binding_affinity_files.keys())))
 
         table_param = {
             'func':'binding_affinity',
-            'pdb_bind_index':param
+            'pdb_bind_index':dock_param
         }
 
     else:
@@ -381,19 +398,19 @@ def db_create():
         table_type = func_name
         data_type = func_name
 
-    table_sn = db.create_table(table_type, table_param)
+    table_idx = db.create_table(table_type, table_param)
 
-    data = get_job_data(data_type, table_sn, table_param)
-    run_multiprocess(data, partial(func, table_sn, table_param))
+    data = get_job_data(data_type, table_idx, table_param)
+    run_multiprocess(data, partial(func, table_idx, table_param))
 
 
 def db_continue():
-    if FLAGS.table_sn is None:
-        raise Exception("table_sn required")
+    if FLAGS.table_idx is None:
+        raise Exception("table_idx required")
 
 
-    table_sn = FLAGS.table_sn
-    table_name, table_param = db.get_table(table_sn)
+    table_idx = FLAGS.table_idx
+    table_name, table_param = db.get_table(table_idx)
 
     func_name = table_param['func']
     func = DatabaseAction[func_name]
@@ -407,54 +424,63 @@ def db_continue():
         table_type = func_name
         data_type = func_name
 
-    data = get_job_data(data_type, table_sn, table_param)
-    run_multiprocess(data, partial(func, table_sn, table_param))
+    data = get_job_data(data_type, table_idx, table_param)
+    run_multiprocess(data, partial(func, table_idx, table_param))
 
 def db_delete():
-    if FLAGS.table_sn is None:
-        raise Exception('table_sn required')
+    if FLAGS.table_idx is None:
+        raise Exception('table_idx required')
 
-    table_sn = FLAGS.table_sn
-    db.delete_table(table_sn)
+    table_idx = FLAGS.table_idx
+    db.delete_table(table_idx)
 
 def db_progress():
-    if FLAGS.table_sn is None:
-        raise Exception('table_sn required')
+    if FLAGS.table_idx is None:
+        raise Exception('table_idx required')
     
-    table_sn = FLAGS.table_sn
+    table_idx = FLAGS.table_idx
 
-    if table_sn:
-        table_sns = [table_sn]
+    if table_idx:
+        table_idxes = [table_idx]
     else:
-        table_sns = sorted(db.get_all_sns())
+        table_idxes = sorted(db.get_all_dix())
+
 
     print("Progress\n")
-    if len(table_sns):
+    if len(table_idxes):
         print("Total jobs |  Finished  | Finished(%) |   Failed   |  Failed(%)  |   Remain   |  Remain(%)  | Table name ")
-    for table_sn in table_sns:
-        table_name, table_param = db.get_table(table_sn)
+    for table_idx in table_idxes:
+        table_name, table_param = db.get_table(table_idx)
         
         func_name = table_param['func']
-        func = DatabaseAction[func_name]
         if func_name == 'smina_dock':
-            table_type = 'docked_ligand'
             data_type = 'dock'
         elif func_name == 'reorder':
-            table_type = 'reorder_ligand'
             data_type='reorder'
         else:
-            table_type = func_name
             data_type = func_name
 
         
         
-        total, finished, failed = get_job_data(data_type, table_sn, table_param, progress=True)
+        total, finished, failed = get_job_data(data_type, table_idx, table_param, progress=True)
         print( "{:<13d} {:<11d} {:<15.2f} {:<11d} {:<14.2f} {:<11d} {:<12.2f} {}". \
                 format(total,
                        finished, 100.*finished/total  if total else 0,
                        failed, 100.*failed/total if total else 0,
                        total - finished - failed, 100.*(total-finished-failed)/total if total else 0,
                        table_name))
+
+
+def db_param():
+    if FLAGS.table_idx is None:
+        raise Exception('table_idx required')
+
+    table_idx = FLAGS.table_idx
+
+    table_name, table_param = db.get_table(table_idx)
+
+    print("Parameter for Table: {}".foramt(table_name))
+    pprint.pprint(table_param)
 
 
 def main():
@@ -466,6 +492,8 @@ def main():
         db_delete()
     if FLAGS.db_progress:
         db_progress()
+    if FLAGS.db_param:
+        db_param()
 
 
 if __name__ == '__main__':
