@@ -7,7 +7,6 @@ import pandas as pd
 from database_action import db 
 import six 
 
-import tensorflow as tf
 import numpy as np
 import sys
 import os
@@ -49,7 +48,7 @@ def save_av4(filepath,labels,elements,multiframe_coords):
     f.write(av4_record)
     f.close()
 
-def convert_data_to_av4(base_dir, rec_path, lig_path):
+def convert_data_to_av4(base_dir, rec_path, lig_path, doc_path, position):
 
     dest_dir = os.path.join(base_dir, _receptor(rec_path))
     if not os.path.exists(dest_dir):
@@ -58,12 +57,32 @@ def convert_data_to_av4(base_dir, rec_path, lig_path):
     prody_receptor = prody.parsePDB(rec_path)
     prody_ligand = prody.parsePDB(lig_path)
 
-    multiframe_ligand_coords = prody_ligand.getCoords()
-    multiframe_ligand_coords = np.expand_dims(multiframe_ligand_coords,-1)
+    receptor_elem = prody_receptor.getElements()
+    ligand_elem =prody_ligand.getElements()
+
+    ligand_coords = prody_ligand.getCoords()
     labels = np.array([1])
+
+    if len(position):
+        # docked list not empty
+        prody_docked = prody.parsePDB(doc_path)
+        docked_elem = prody_docked.getElemens()
+
+        assert all(np.asarray(docked_elem) == np.asarray(ligand_elem))
+
+        docked_coords = prody_docked.getCoordsets()[position]
+        for docked_coord in docked_coords:
+            ligand_coords = np.dstack((ligand_coords, docked_coord))
+            labels = np.concatenate((labels, [0]))
+    else:
+        ligand_coords = np.expand_dims(ligand_coords,-1)
+        
+
+
     try:
-        receptor_elements = map(atom_to_number,prody_receptor.getElements())
-        ligand_elements = map(atom_to_number,prody_ligand.getElements())
+        receptor_elements = map(atom_to_number,receptor_elem)
+        ligand_elements = map(atom_to_number,ligand_elem)
+        
     except:
         return None, None
     
@@ -74,7 +93,7 @@ def convert_data_to_av4(base_dir, rec_path, lig_path):
     av4_rec_path = os.path.join(dest_dir,rec_name)
     av4_lig_path = os.path.join(dest_dir,lig_name)
     save_av4(av4_rec_path,[0], receptor_elements, prody_receptor.getCoords())
-    save_av4(av4_lig_path, labels , ligand_elements, multiframe_ligand_coords)
+    save_av4(av4_lig_path, labels , ligand_elements, ligand_coords)
     return av4_rec_path, av4_lig_path
 
 class table(pd.DataFrame):
@@ -134,99 +153,231 @@ class retrive_av4:
     def __init__(self, folder_name):
         
         self.folder_name = folder_name
-        self.affinity = None
 
-    def receptor(self, receptor_sn):
-        _, _, rec = db.get_success_data(receptor_sn, dataframe=True)
-        primary_key = db.primary_key_for(receptor_sn)
-        rec = rec[primary_key]
-        self.rec = table(rec)
-        rec_folder = db.get_folder(receptor_sn)
-        self.rec_folder = '{}_{}'.format(receptor_sn, rec_folder)
+        self.ligand = None
+        self.position = None
+        self.receptor_folder = None 
+        self.ligand_folder = None 
+        self.docked_folder = None 
 
-
-    def crystal(self, crystal_sn):
-        _, _, cry = db.get_success_data(crystal_sn, dataframe=True)
-        primary_key = db.primary_key_for(crystal_sn)
-        cry = cry[primary_key]
-        self.cry = table(cry)
-        cry_folder = db.get_folder(crystal_sn)
-        self.cry_folder = '{}_{}'.format(crystal_sn, cry_folder)
-
-    def norm_affinity(self, affinity_sn, rest):
-        
-        _, _, affinity = db.get_success_data(affinity_sn, dataframe=True)
-        affinity = table(affinity).apply_rest('norm_affinity',rest)
-        primary_key = db.primary_key_for(affinity_sn)
-        affinity = affinity[primary_key+['norm_affinity']]
-        if self.affinity is None:
-            self.affinity = table(affinity)
+    def receptor(self, receptor_idx):
+        _, _, df = db.get_success_data(receptor_idx, dataframe=True)
+        primary_key = db.primary_key_for(receptor_idx)
+        df = df[primary_key]
+        df = table(df) 
+        if self.ligand is None:
+            self.ligand  = df 
         else:
-            self.affinity = self.affinity and table(affinity)
+            self.ligand = self.ligand and df
 
-    def log_affinity(self, affinity_sn, rest):
-        
-        _, _, affinity = db.get_success_data(affinity_sn, dataframe=True)
-        affinity = table(affinity).apply_rest('log_affinity',rest)
-        primary_key = db.primary_key_for(affinity_sn)
-        affinity = affinity[primary_key+['log_affinity']]
-        if self.affinity is None:
-            self.affinity = table(affinity)
+        folder_name = db.get_folder(receptor_idx)
+        self.receptor_folder = '{}_{}'.format(receptor_idx, folder_name)
+
+
+    def crystal(self, crystal_idx):
+        _, _, df  = db.get_success_data(crystal_idx, dataframe=True)
+        primary_key = db.primary_key_for(crystal_idx)
+        df = df[primary_key]
+        df = table(df) 
+
+        if self.ligand is None:
+            self.ligand = df 
         else:
-            self.affinity = self.affinity and table(affinity)
+            self.ligand = self.ligand & df 
+        
+        folder_name  = db.get_folder(crystal_idx)
+        self.ligand_folder = '{}_{}'.format(crystal_idx, folder_name)
+
+    def docked(self, docked_idx):
+        _, _, df = db.get_success_data(docked_idx, dataframe=True)
+        primary_key = db.primary_key_for(docked_idx)
+        df = df[primary_key]
+        df = table(df)
+
+        if self.ligand is None:
+            self.ligand = df 
+        else:
+            self.ligand = self.ligand & df 
+        
+        folder_name = db.get_folder(docked_idx)
+        self.docked_folder = '{}_{}'.format(docked_idx, folder_name )
+
+    def overlap(self, overlap_idx, rest):
+        _, _, df = db.get_success_data(overlap_idx, dataframe=True)
+        primary_key = db.primary_key_for(overlap_idx)
+        df = df[primary_key]
+        df = table(df).apply_rest('overlap',rest)
+
+        if self.position is None:
+            self.position = df 
+        else:
+            self.position = self.docked & df 
+
+
+
+    def rmsd(self, rmsd_idx, rest):
+        
+        _, _, df = db.get_success_data(crystal_idx, dataframe=True)
+        primary_key = db.primary_key_for(rmsd_idx)
+        df= df[primary_key + ['rmsd']]
+        df = table(df).apply_rest('rmsd',rest)
+        
+        if self.position is None:
+            self.position = df
+        else:
+            self.position = self.position & df
+        
+    def native_contact(self, native_contact_idx, rest):
+        
+        _, _, df = db.get_success_data(native_contact_idx, dataframe=True)
+        primary_key = db.primary_key_for(native_contact_idx)
+        df = df[primary_key + ['native_contact']]
+        df = table(df).apply_rest('native_contact',rest)
+
+        if self.position is None:
+            self.position = df 
+        else: 
+            self.position = self.position & df 
+
+    def norm_affinity(self, affinity_idx, rest):
+        
+        _, _, df = db.get_success_data(affinity_idx, dataframe=True)
+        primary_key = db.primary_key_for(affinity_idx)
+        df = df[primary_key+['norm_affinity']]
+        df = table(df).apply_rest('norm_affinity',rest)
+        
+        if self.ligand is None:
+            self.ligand = df
+        else:
+            self.ligand = self.ligand & df 
+
+    def log_affinity(self, affinity_idx, rest):
+        
+        _, _, df = db.get_success_data(affinity_idx, dataframe=True)
+        primary_key = db.primary_key_for(affinity_idx)
+        df = df[primary_key+['log_affinity']]
+        df = table(df).apply_rest('log_affinity',rest)
+
+        if self.ligand is None:
+            self.ligand = df
+        else:
+            self.ligand = self.ligand & df 
+
+
 
     def get_receptor_and_ligand(self):
         
-        valid = self.affinity & self.rec & self.cry 
-        collection = []
-        for i in range(len(valid)):
-            item = valid.ix[i]
-            rec = item['receptor']
-            file = '{}_{}_{}_{}'.format(*item[['receptor', 'chain', 'resnum', 'resname']])
-            receptor_path = os.path.join(config.data_dir, 
-                                    self.rec_folder, 
-                                    item['receptor'],
-                                    file+'_receptor.pdb')
-
-            ligand_path = os.path.join(config.data_dir,
-                                       self.cry_folder ,
-                                       item['receptor'],
-                                       file+'_ligand.pdb')
+        if self.position is None:
+            valid = self.ligand 
+        
             if 'log_affinity' in valid.columns:
-                affinity = item['log_affinity']
+                aff_key = 'log_affinity'
             else:
-                affinity = item['norm_affinity']
+                aff_key = 'norm_affinity'
 
+            collection = []
+            for i in range(len(valid)):
+                item = valid.ix[i]
+                receptor = item['receptor']
+
+                file = '_'.join(item[['receptor', 'chain', 'resnum', 'resname']])
+                
+                receptor_path = os.path.join(config.data_dir, 
+                                        self.receptor_folder, 
+                                        receptor,
+                                        file+'_receptor.pdb')
+
+                ligand_path = os.path.join(config.data_dir,
+                                        self.ligand_folder,
+                                        receptor,
+                                        file+'_ligand.pdb')
+
+                docked_path = ''
+                positions = []
+
+                affinity = item[aff_key]
+
+                collection.append([receptor_path, 
+                                ligand_path, 
+                                docked_path, 
+                                positions, 
+                                affinity])
             
-            collection.append([receptor_path, ligand_path, affinity])
+        
+        else:
+            valid = self.ligand and self.position  
+
+            if 'log_affinity' in valid.columns:
+                aff_key = 'log_affinity'
+            else:
+                aff_key = 'norm_affinity'
+            
+            collection =[]
+            
+            for keys, group in valid.groupby(['receptor','chain','resnum','resname', aff_key]):
+                receptor = keys[0]
+                file = '_'.join(keys[:4])
+
+                receptor_path = os.path.join(config.data_dir, 
+                                        self.receptor_folder, 
+                                        receptor,
+                                        file+'_receptor.pdb')
+
+                ligand_path = os.path.join(config.data_dir,
+                                        self.ligand_folder,
+                                        receptor,
+                                        file+'_ligand.pdb')
+
+                docked_path = os.path.join(config.data_dir,
+                                        self.docked_folder,
+                                        receptor,
+                                        file+'_ligand.pdb')
+
+                positions = sorted(group['position'])
+
+                affinity = list(set(group[aff_key]))
+                assert len(affinity) == 1
+                affinity = affinity[0]
+
+                collection.append([receptor_path, 
+                                   ligand_path, 
+                                   docked_path, 
+                                   positions, 
+                                   affinity])
 
         #print(set(map(lambda x:len(x),collection)))
         
-        if not os.path.exists(config.table_dir):
-            os.makedirs(config.table_dir)
-        df = pd.DataFrame(collection,columns=['receptor','ligand','affinity'])
-        
-        df.to_csv(os.path.join(config.table_dir,'raw.csv'), index=False)
+        if not os.path.exists(config.export_dir):
+            os.makedirs(config.export_dir)
 
-        export_dir = os.path.join(config.database_root, self.folder_name)
+        df = pd.DataFrame(collection,columns=['receptor','ligand','docked','position','affinity'])
+        df.to_csv(os.path.join(config.export_dir,'raw.csv'), index=False, sep='\t')
+
+        data_export_dir = os.path.join(config.export_dir, self.folder_name)
 
         index = []
-        for rec, lig, aff in collection:
-            rec_path, lig_path = convert_data_to_av4(export_dir, rec, lig)
+        for receptor, ligand, docked, position, aff in collection:
+            rec_path, lig_path = convert_data_to_av4(data_export_dir,
+                                                     receptor,
+                                                     ligand,
+                                                     docked,
+                                                     position)
             if rec_path is None:
                 continue
-            index.append([rec_path, lig_path, aff])
+            index.append([rec_path, lig_path, affinity])
 
         df = pd.DataFrame(index, columns=['receptor','ligand','affinity'])
-        df.to_csv(os.path.join(config.table_dir,'index.csv'), index=False)
+        df.to_csv(os.path.join(config.export_dir,'index.csv'), index=False)
 
 
 
 def test():
     
-    ra = retrive_av4('av4') # output's filder name
+    ra = retrive_av4('av4_') # output's filder name
     ra.receptor(2) # splited receptor table sn
     ra.crystal(3) # splited ligand table sn
-    ra.log_affinity(4, [None,-27]) # affinity table sn , [minimum, maximum]
-
+    ra.log_affinity(9, [None,-27]) # affinity table idx , [minimum, maximum]
     ra.get_receptor_and_ligand() # convert file into av4 format
+
+if __name__ == '__main__':
+    test()

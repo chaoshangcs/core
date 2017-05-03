@@ -87,15 +87,6 @@ process_num = 8
 # datum = [table_name, table_type, table_sn, create_time, encoded_param]
 # data = [datum]
 
-
-"""
-overlap detaction constant
-"""
-tanimoto_cutoff = 0.75  # an exact Tanimoto similarity score should be recorded in the file
-clash_cutoff_A = 4      # 
-clash_size_cutoff = 0.3 # __ an exact value should be recorded
-
-
 """
 Folders
 """
@@ -103,20 +94,14 @@ Folders
 script_path = sys.path[0]
 #base folder for all the output
 #database_root = os.path.join(script_path, '..', 'AffinityDB')
-<<<<<<< HEAD
-database_root = '/home/xander/affinityDB/aff_test'
-=======
-database_root = '/home/maksym/PyCharmProjects/datasets/affinity_DB_v2'
->>>>>>> b6605cfc14ff3e8a471015122c700962e3ecb04d
+database_root = '/home/xander/affinityDB/aff_test_v2'
+
 
 db_path =os.path.join(database_root, db_name)
 
 data_dir = os.path.join(database_root,'data')
-# log files
-#log_dir = os.path.join(database_root, 'log')
-# csv files
-#table_dir = os.path.join(database_root, 'table')
 
+export_dir = os.path.join(database_root, 'export')
 
 """
 File Path 
@@ -124,7 +109,7 @@ File Path
 
 # path of smina binary file
 #smina = 'smina.static'
-smina = '/usr/local/bin/smina'
+smina = '/home/xander/Program/smina/smina.static'
 
 # pdb_target_list
 #list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
@@ -165,43 +150,11 @@ smina_dock_pm = {
 
 }
 
-vinardo_pm = {
-    'args': [],
-    'kwargs' : {
-    'autobox_add':12,
-    'num_modes':400,
-    'exhaustiveness':64,
-    'scoring':'vinardo',
-    'cpu':1
-    }
-}
-
-smina_pm = {
-    'args':[],
-    'kwargs':{
-    'num_modes':400,
-    'cpu':1
-    }
-}
-
-reorder_pm = {
-    'args':['score_only'],
-    'kwargs':{
-    'custom_scoring':scoring_terms 
-    }
-}
-
 overlap_pm = {
     'default':{
         'clash_cutoff_A':4,
         'clash_size_cutoff':0.3
     }
-}
-
-
-overlap_default = {
-    'clash_cutoff_A':4,
-    'clash_size_cutoff':0.3
 }
 
 native_contact_pm = {
@@ -210,9 +163,6 @@ native_contact_pm = {
     }
 }
 
-native_contace_default = {
-    'distance_threshold':4.0
-}
 
 binding_affinity_files = {
     'pdbbind':'/home/xander/data/PDBbind/indexs/index/INDEX_general_PL.2016'

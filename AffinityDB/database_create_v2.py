@@ -191,8 +191,8 @@ def db_create():
     elif FLAGS.action == 'split_receptor':
         if FLAGS.folder_name is None:
             raise Exception("folder_name required")
-        if FLAGS.download_sn is None:
-            raise Exception('download_sn required')
+        if FLAGS.download_idx is None:
+            raise Exception('download_idx required')
 
         folder_name = FLAGS.folder_name
         download_idx = FLAGS.download_idx
@@ -220,7 +220,8 @@ def db_create():
             'output_folder': folder_name,
             'download_idx': download_idx,
             'input_download_folder': '{}_{}'.format(download_idx, download_folder),
-            'depend':[download_idx]
+            'depend':[download_idx],
+            'fit_box_size':20
         } 
 
 
@@ -254,9 +255,9 @@ def db_create():
         if FLAGS.folder_name is None:
             raise Exception("folder_name required")
         if FLAGS.receptor_idx is None:
-            raise Exception('receptor_sn required')
+            raise Exception('receptor_idx required')
         if FLAGS.ligand_idx is None:
-            raise Exception('ligand_sn required')
+            raise Exception('ligand_idx required')
         if FLAGS.param is None:
             raise Exception('param required')
 
@@ -315,9 +316,9 @@ def db_create():
                            + "available options are: {}".format(', '.join(config.overlap_pm.keys())))
 
         overlap_param = config.overlap_pm[overlap_param]
-        crystal_idx = FLAGS.crystal_sn
+        crystal_idx = FLAGS.crystal_idx
         crystal_folder = db.get_folder(crystal_idx)
-        docked_idx = FLAGS.docked_sn
+        docked_idx = FLAGS.docked_idx
         docked_folder = db.get_folder(docked_idx)
         
         
@@ -347,13 +348,13 @@ def db_create():
             raise KeyError("dock param {} doesn't exists. ".format(native_contact_param) \
                            + "available options are: {}".format(', '.join(config.native_contact_pm.keys())))
 
-        native_contact_param = config.overlap_pm[native_contact_param]
+        native_contact_param = config.native_contact_pm[native_contact_param]
 
         receptor_idx = FLAGS.receptor_idx
         receptor_folder = db.get_folder(receptor_idx)
         crystal_idx = FLAGS.crystal_idx
         crystal_folder = db.get_folder(crystal_idx)
-        docked_idx = FLAGS.docked_sn
+        docked_idx = FLAGS.docked_idx
         docked_folder = db.get_folder(docked_idx)
         table_param = {
             'func':'native_contact',
@@ -479,7 +480,7 @@ def db_param():
 
     table_name, table_param = db.get_table(table_idx)
 
-    print("Parameter for Table: {}".foramt(table_name))
+    print("Parameter for Table: {}".format(table_name))
     pprint.pprint(table_param)
 
 

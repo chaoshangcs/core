@@ -63,7 +63,7 @@ tables = {
                             ('resnum','text'),
                             ('resname','text'),
                             ('heavy_atom','integer'),
-                            ('fit_in_box', 'integer'),
+                            ('max_size_on_axis', 'real'),
                             ('state','integer'),
                             ('comment','text')
                         ]

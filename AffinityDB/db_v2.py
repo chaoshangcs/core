@@ -109,7 +109,7 @@ class AffinityDatabase:
 
         return table_idx
 
-    def get_table_name_by_sn(self, idx):
+    def get_table_name_by_idx(self, idx):
         idx = int(idx)
         cursor = self.conn.cursor()
         stmt = 'select name from db_info where table_idx=%d;' % idx
@@ -159,11 +159,15 @@ class AffinityDatabase:
         values = cursor.fetchall()
         if values:
             for val in values:
-                self.delete_table(val)
+                # will return a tuple like (1,)
+                self.delete_table(val[0])
 
         # delete from dependence
-        stmt = 'delete from dependence where source=%d' % idx
+        stmt = 'delete from dependence where source=%d;' % idx
         cursor.execute(stmt)
+
+        # delete from dependence
+        stmt = 'delete from dependence where dest=%d;' % idx
 
         # delete from db_info
         stmt = 'delete from db_info where table_idx=%d;' % idx
@@ -175,27 +179,28 @@ class AffinityDatabase:
 
         self.conn.commit()
         # if have data with this table remove relative data
-        if 'folder' in table_param.keys():
-            folder_name = '{}_{}'.format(idx, table_param['folder'])
+        if 'output_folder' in table_param.keys():
+            folder_name = '{}_{}'.format(idx, table_param['output_folder'])
             del_folder_name = 'del_' + folder_name
             folder_dir = os.path.join(config.data_dir, folder_name)
             del_folder_dir = os.path.join(config.data_dir, del_folder_name)
             if os.path.exists(folder_dir):
+                
                 os.system('mv {} {} '.format(folder_dir, del_folder_dir))
                 os.system('rm -r {}'.format(del_folder_dir))
 
         
     @lockit
-    def insert(self, table_sn, values, head=None):
-        self.insert_or_replace(table_sn, values, head)
+    def insert(self, table_idx, values, head=None):
+        self.insert_or_replace(table_idx, values, head)
 
-    def insert_or_replace(self, table_sn, values, head=None):
+    def insert_or_replace(self, table_idx, values, head=None):
         
-        if table_sn in basic_tables.keys():
-            table_name = table_sn
+        if table_idx in basic_tables.keys():
+            table_name = table_idx
         else:
-            table_sn = int(table_sn)       
-            table_name = self.get_table(table_sn, with_param=False)
+            table_idx = int(table_idx)       
+            table_name = self.get_table(table_idx, with_param=False)
 
         db_value = lambda x:'"%s"' % x if type(x).__name__ in ['str','unicode'] else str(x)
         db_values = [ map(db_value, value) for value in values ]
@@ -271,7 +276,7 @@ class AffinityDatabase:
 
     def get_all_dix(self):
         
-        stmt = 'select table_sn from db_info;'
+        stmt = 'select table_idx from db_info;'
         cursor = self.conn.cursor()
         cursor.execute(stmt)
         values = cursor.fetchall()
@@ -280,7 +285,7 @@ class AffinityDatabase:
 
     def get_dix_by_type(self, table_type):
         
-        stmt = 'select table_sn from db_info '
+        stmt = 'select table_idx from db_info '
         stmt += ' where type="%s";' % table_type
         cursor = self.conn.cursor()
         cursor.execute(stmt)

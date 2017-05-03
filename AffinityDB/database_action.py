@@ -55,7 +55,7 @@ def split_ligand(table_idx, param, input_data):
         
         receptor = input_data
 
-        fit_box_size = param['fit_box_dize']
+        fit_box_size = param['fit_box_size']
 
         output_folder = param['output_folder']                                                                                        # which folder ? output_folder
         output_folder = '{}_{}'.format(table_idx, output_folder)                                                                       # all table_sn become table_idx
@@ -81,15 +81,15 @@ def split_ligand(table_idx, param, input_data):
                 heavy_lig = lig.select('not hydrogen')
                 heavy_atom = heavy_lig.numAtoms()
                 heavy_coord =heavy_lig.getCoords()
-                max_distance_on_axis = max(heavy_coord.max(axis=0) - heavy_coord.min(axis=0))
-                fit_in = int(max_distance_on_axis>fit_box_size)
+                max_size_on_axis = max(heavy_coord.max(axis=0) - heavy_coord.min(axis=0))
+                
 
 
                 lig_name = '_'.join([receptor,chain,resnum,resname,'ligand']) + '.pdb'
                 prody.writePDB(os.path.join(output_lig_dir, lig_name), lig)
 
 
-                record = [receptor, chain, resnum, resname, heavy_atom, fit_in, 1, 'success']                                     # data = success_message
+                record = [receptor, chain, resnum, resname, heavy_atom, max_size_on_axis, 1, 'success']                                     # data = success_message
                 records = [record]
                 db.insert(table_idx, records)
             except Exception as e:
