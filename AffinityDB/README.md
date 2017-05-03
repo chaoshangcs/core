@@ -93,3 +93,21 @@ python database_create_v2.py --create --action=overlap --crystal_sn=4 --docked_s
 # calculate native_contact
 python database_create_v2.py --create --action=native_contact --receptor_sn=2 --crystal_sn=4 --docked_sn=5
 ```
+
+## Retrive av4
+```bash
+# download pdb
+python database_create_v2.py --create --action=download --folder_name=download
+
+# split the receptor from pdb
+python database_create_v2.py --create --action=split_receptor --folder_name=splite_receptor --download_sn=1
+
+# split the ligand from pdb
+python database_create_v2.py --create --action=split_ligand --folder_name=splite_ligand --download_sn=1
+
+# parse binding affinity
+python database_create_v2.py --create --binding_affinity --param=pdbbind
+
+# retrive av4 file
+python retrive_v2.py
+```
