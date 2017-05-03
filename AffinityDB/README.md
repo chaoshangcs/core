@@ -73,25 +73,25 @@ Arguments for different kinds of task
 python database_create_v2.py --create --action=download --folder_name=download
 
 # split the receptor from pdb
-python database_create_v2.py --create --action=split_receptor --folder_name=splite_receptor --download_sn=1
+python database_create_v2.py --create --action=split_receptor --folder_name=splite_receptor --download_idx=1
 
 # split the ligand from pdb
-python database_create_v2.py --create --action=split_ligand --folder_name=splite_ligand --download_sn=1
+python database_create_v2.py --create --action=split_ligand --folder_name=splite_ligand --download_idx=1
 
 # reorder the ligand
-python database_create_v2.py --create --action=reorder --folder_name=reorder --ligand_sn=3 --receptor_sn=2
+python database_create_v2.py --create --action=reorder --folder_name=reorder --ligand_idx=3 --receptor_idx=2
 
 # docking
-python database_create_v2.py --create --action=smina_dock --folder_name=vinardo --ligand_sn=4 --receptor_sn=2 --dock_param=vinardo
+python database_create_v2.py --create --action=smina_dock --folder_name=vinardo --ligand_idx=4 --receptor_idx=2 --param=vinardo
 
 # calculate rmsd
-python database_create_v2.py --create --action=rmsd --crystal_sn=4 --docked_sn=5
+python database_create_v2.py --create --action=rmsd --crystal_idx=4 --docked_idx=5
 
 # calculate overlap
-python database_create_v2.py --create --action=overlap --crystal_sn=4 --docked_sn=5
+python database_create_v2.py --create --action=overlap --crystal_idx=4 --docked_idx=5
 
 # calculate native_contact
-python database_create_v2.py --create --action=native_contact --receptor_sn=2 --crystal_sn=4 --docked_sn=5
+python database_create_v2.py --create --action=native_contact --receptor_idx=2 --crystal_idx=4 --docked_idx=5
 ```
 
 ## Retrive av4
@@ -100,10 +100,10 @@ python database_create_v2.py --create --action=native_contact --receptor_sn=2 --
 python database_create_v2.py --create --action=download --folder_name=download
 
 # split the receptor from pdb
-python database_create_v2.py --create --action=split_receptor --folder_name=splite_receptor --download_sn=1
+python database_create_v2.py --create --action=split_receptor --folder_name=splite_receptor --download_idx=1
 
 # split the ligand from pdb
-python database_create_v2.py --create --action=split_ligand --folder_name=splite_ligand --download_sn=1
+python database_create_v2.py --create --action=split_ligand --folder_name=splite_ligand --download_idx=1
 
 # parse binding affinity
 python database_create_v2.py --create --binding_affinity --param=pdbbind
