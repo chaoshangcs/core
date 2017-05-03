@@ -113,7 +113,8 @@ smina = '/home/xander/Program/smina/smina.static'
 
 # pdb_target_list
 #list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
-list_of_PDBs_to_download = '/home/xander/affinityDB/aff_test/affinity_test.txt'
+#list_of_PDBs_to_download = '/home/xander/affinityDB/aff_test/affinity_test.txt'
+list_of_PDBs_to_download = os.path.join(sys.path[0], 'pdb_list','pdb_list.txt')
 
 
 # example scoring
@@ -165,5 +166,5 @@ native_contact_pm = {
 
 
 binding_affinity_files = {
-    'pdbbind':'/home/xander/data/PDBbind/indexs/index/INDEX_general_PL.2016'
+    'pdbbind':os.path.join(sys.path[0], 'binding_affinity_dbs','INDEX_general_PL.2016')
 }

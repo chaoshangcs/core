@@ -379,7 +379,7 @@ def test():
     ra = retrive_av4('av4') # output's filder name
     ra.receptor(2) # splited receptor table sn
     ra.crystal(3) # splited ligand table sn
-    ra.log_affinity(9, [None,0.2]) # affinity table idx , [minimum, maximum]
+    ra.log_affinity(4, None) # affinity table idx , [minimum, maximum]
     ra.get_receptor_and_ligand() # convert file into av4 format
 
 if __name__ == '__main__':
