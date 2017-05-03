@@ -6,7 +6,7 @@ from collections import namedtuple
 import pandas as pd 
 from database_action import db 
 import six 
-
+import time
 import numpy as np
 import sys
 import os
@@ -17,6 +17,7 @@ import pandas as pd
 sys.path.append('..')
 from av4_atomdict import atom_dictionary
 
+
 def _receptor(path):
     return os.path.basename(path).split('_')[0]
 
@@ -25,7 +26,7 @@ def atom_to_number(atomname):
     return atomic_tag_number
 
 def save_av4(filepath,labels,elements,multiframe_coords):
-    labels = np.asarray(labels,dtype=np.int32)
+    labels = np.asarray(labels,dtype=np.float32)
     elements = np.asarray(elements,dtype=np.int32)
     multiframe_coords = np.asarray(multiframe_coords,dtype=np.float32)
 
@@ -35,6 +36,7 @@ def save_av4(filepath,labels,elements,multiframe_coords):
     if multiframe_coords.ndim==2:
         if not int(len(labels))==1:
             raise Exception ('Number labels is not equal to the number of coordinate frames')
+            
     else:
         if not (int(len(multiframe_coords[0, 0, :]) == int(len(labels)))):
             raise Exception('Number labels is not equal to the number of coordinate frames')
@@ -48,7 +50,7 @@ def save_av4(filepath,labels,elements,multiframe_coords):
     f.write(av4_record)
     f.close()
 
-def convert_data_to_av4(base_dir, rec_path, lig_path, doc_path, position):
+def convert_data_to_av4(base_dir, rec_path, lig_path, doc_path, position, affinity):
 
     dest_dir = os.path.join(base_dir, _receptor(rec_path))
     if not os.path.exists(dest_dir):
@@ -61,7 +63,7 @@ def convert_data_to_av4(base_dir, rec_path, lig_path, doc_path, position):
     ligand_elem =prody_ligand.getElements()
 
     ligand_coords = prody_ligand.getCoords()
-    labels = np.array([1])
+    labels = np.array([affinity], dtype=np.float32)
 
     if len(position):
         # docked list not empty
@@ -73,7 +75,7 @@ def convert_data_to_av4(base_dir, rec_path, lig_path, doc_path, position):
         docked_coords = prody_docked.getCoordsets()[position]
         for docked_coord in docked_coords:
             ligand_coords = np.dstack((ligand_coords, docked_coord))
-            labels = np.concatenate((labels, [0]))
+            labels = np.concatenate((labels, [1.]))
     else:
         ligand_coords = np.expand_dims(ligand_coords,-1)
         
@@ -153,12 +155,18 @@ class retrive_av4:
     def __init__(self, folder_name):
         
         self.folder_name = folder_name
+        self.export_dir = os.path.join(config.export_dir, folder_name)
+        while os.path.exists(self.export_dir):
+            timestr = time.strftime('%m_%d_%H', time.gmtime())
+        
+            self.export_dir = self.export_dir + '_' + timestr
 
         self.ligand = None
         self.position = None
         self.receptor_folder = None 
         self.ligand_folder = None 
         self.docked_folder = None 
+        self.affinity_key = None
 
     def receptor(self, receptor_idx):
         _, _, df = db.get_success_data(receptor_idx, dataframe=True)
@@ -241,10 +249,11 @@ class retrive_av4:
 
     def norm_affinity(self, affinity_idx, rest):
         
+        self.affinity_key = 'norm_affinity'
         _, _, df = db.get_success_data(affinity_idx, dataframe=True)
         primary_key = db.primary_key_for(affinity_idx)
-        df = df[primary_key+['norm_affinity']]
-        df = table(df).apply_rest('norm_affinity',rest)
+        df = df[primary_key+[self.affinity_key]]
+        df = table(df).apply_rest(self.affinity_key,rest)
         
         if self.ligand is None:
             self.ligand = df
@@ -253,10 +262,11 @@ class retrive_av4:
 
     def log_affinity(self, affinity_idx, rest):
         
+        self.affinity_key = 'log_affinity'
         _, _, df = db.get_success_data(affinity_idx, dataframe=True)
         primary_key = db.primary_key_for(affinity_idx)
-        df = df[primary_key+['log_affinity']]
-        df = table(df).apply_rest('log_affinity',rest)
+        df = df[primary_key+[self.affinity_key]]
+        df = table(df).apply_rest(self.affinity_key,rest)
 
         if self.ligand is None:
             self.ligand = df
@@ -270,11 +280,7 @@ class retrive_av4:
         if self.position is None:
             valid = self.ligand 
         
-            if 'log_affinity' in valid.columns:
-                aff_key = 'log_affinity'
-            else:
-                aff_key = 'norm_affinity'
-
+            
             collection = []
             for i in range(len(valid)):
                 item = valid.ix[i]
@@ -295,7 +301,7 @@ class retrive_av4:
                 docked_path = ''
                 positions = []
 
-                affinity = item[aff_key]
+                affinity = item[self.affinity_key]
 
                 collection.append([receptor_path, 
                                 ligand_path, 
@@ -307,10 +313,6 @@ class retrive_av4:
         else:
             valid = self.ligand and self.position  
 
-            if 'log_affinity' in valid.columns:
-                aff_key = 'log_affinity'
-            else:
-                aff_key = 'norm_affinity'
             
             collection =[]
             
@@ -335,7 +337,7 @@ class retrive_av4:
 
                 positions = sorted(group['position'])
 
-                affinity = list(set(group[aff_key]))
+                affinity = list(set(group[self.affinity_key]))
                 assert len(affinity) == 1
                 affinity = affinity[0]
 
@@ -346,14 +348,14 @@ class retrive_av4:
                                    affinity])
 
         #print(set(map(lambda x:len(x),collection)))
-        
-        if not os.path.exists(config.export_dir):
-            os.makedirs(config.export_dir)
+        export_table_dir = os.path.join(self.export_dir,'index')
+        if not os.path.exists(export_table_dir):
+            os.makedirs(export_table_dir)
 
         df = pd.DataFrame(collection,columns=['receptor','ligand','docked','position','affinity'])
-        df.to_csv(os.path.join(config.export_dir,'raw.csv'), index=False, sep='\t')
+        df.to_csv(os.path.join(export_table_dir,'raw.csv'), index=False, sep='\t')
 
-        data_export_dir = os.path.join(config.export_dir, self.folder_name)
+        data_export_dir = os.path.join(self.export_dir,'data')
 
         index = []
         for receptor, ligand, docked, position, aff in collection:
@@ -361,22 +363,23 @@ class retrive_av4:
                                                      receptor,
                                                      ligand,
                                                      docked,
-                                                     position)
+                                                     position,
+                                                     aff)
             if rec_path is None:
                 continue
             index.append([rec_path, lig_path, affinity])
 
         df = pd.DataFrame(index, columns=['receptor','ligand','affinity'])
-        df.to_csv(os.path.join(config.export_dir,'index.csv'), index=False)
+        df.to_csv(os.path.join(export_table_dir,'index.csv'), index=False)
 
 
 
 def test():
     
-    ra = retrive_av4('av4_') # output's filder name
+    ra = retrive_av4('av4') # output's filder name
     ra.receptor(2) # splited receptor table sn
     ra.crystal(3) # splited ligand table sn
-    ra.log_affinity(9, [None,-27]) # affinity table idx , [minimum, maximum]
+    ra.log_affinity(9, [None,0.2]) # affinity table idx , [minimum, maximum]
     ra.get_receptor_and_ligand() # convert file into av4 format
 
 if __name__ == '__main__':
