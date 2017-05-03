@@ -94,7 +94,7 @@ python database_create_v2.py --create --action=overlap --crystal_idx=4 --docked_
 python database_create_v2.py --create --action=native_contact --receptor_idx=2 --crystal_idx=4 --docked_idx=5
 ```
 
-## Retrive av4
+## Get av4
 
 ### Install requirement
 Install using `pip install -r requirements.txt`
