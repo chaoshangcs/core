@@ -5,6 +5,7 @@ import av4_input
 import av4_networks
 from av4_config import FLAGS
 import av4_conformation_sampler
+import av4_cost_functions
 
 
 class SamplingAgentonGPU:
@@ -86,11 +87,11 @@ class GradientDescendMachine:
             logits = av4_networks.max_net.compute_output(image_batch, self.keep_prob, FLAGS.batch_size)
 
 
-        self.softmax_RMSD = av4_conformation_sampler.softmax_cross_entropy_with_RMSD(logits=logits,lig_RMSDs=lig_RMSD_batch)
-        tf.summary.scalar('softmax_cross_entropy_with_RMSD',tf.reduce_mean(self.softmax_RMSD))
+        self.cost = av4_cost_functions.cross_entropy_with_RMSD(logits=logits,lig_RMSDs=lig_RMSD_batch)
+        tf.summary.scalar('cost',tf.reduce_mean(self.cost))
 
         with tf.name_scope("Adam_optimizer"):
-            self.train_step_run = tf.train.AdamOptimizer(1e-4).minimize(self.softmax_RMSD)
+            self.train_step_run = tf.train.AdamOptimizer(1e-4).minimize(self.cost)
 
 
 
@@ -123,7 +124,7 @@ class GradientDescendMachine:
             print "Restoring variables from sleep. This may take a while..."
             self.saver.restore(self.sess,FLAGS.saved_session)
             print "unitialized vars:", self.sess.run(tf.report_uninitialized_variables())
-
+        # do not allow to add any nodes to the graph after this point
         tf.get_default_graph().finalize()
 
     def do_sampling(self, sample_epochs=None):
@@ -135,7 +136,6 @@ class GradientDescendMachine:
             self.sampling_coord.run_samples = None
         else:
             self.sampling_coord.run_samples = self.ex_in_database * sample_epochs
-
         threads = tf.train.start_queue_runners(sess=self.sess, coord=self.sampling_coord)
 
         self.ag0.start()
@@ -150,14 +150,11 @@ class GradientDescendMachine:
         if sample_epochs is not None:
             self.sampling_coord.join(self.sampling_coord.threads)
             self.sampling_coord.clear_stop()
-
         return None
 
 
     def do_training(self,train_epochs=None):
-
         while True:
-
 
             if (self.global_step % 100 == 99):
                 self.saver.save(self.sess, FLAGS.summaries_dir + '/' + str(FLAGS.run_name) + "_netstate/saved_state", global_step=self.global_step)

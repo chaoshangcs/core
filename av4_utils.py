@@ -194,7 +194,7 @@ def deep_affine_transform(coords,deep_transition_matrix):
 
 
 
-def generate_exhaustive_affine_transform(shift_ranges=[10,10,10],shift_deltas=[1,1,1],rot_ranges=[360,360,360]):
+def exhaustive_affine_transform(shift_ranges=[10,10,10],shift_deltas=[1,1,1],rot_ranges=[360,360,360]):
     """By default,makes shifts by 1, in X,Y,Z directions"""
 
     # shift along X,Y,Z
@@ -302,7 +302,7 @@ def generate_exhaustive_affine_transform(shift_ranges=[10,10,10],shift_deltas=[1
     return xyz_shift_matrix
 
 
-def generate_identity_matrices(num_frames):
+def identity_matrices(num_frames):
     "for convenience of generating identity transformation matrices"
 
     afn0_0 = tf.ones([num_frames])
