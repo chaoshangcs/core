@@ -68,8 +68,8 @@ class SamplingAgent:
                                      av4_utils.exhaustive_affine_transform(shift_ranges,shift_deltas)],
                                     0)
         self._num_images_per_cycle = self.sess.run(tf.shape(lig_pose_tforms))[0]
-        affine_tforms_queue = tf.FIFOQueue(capacity=self._num_images_per_cycle, dtypes=tf.float32,shapes=[4, 4])
-        self._affine_tforms_queue_clean = affine_tforms_queue.enqueue_many(
+        affine_tforms_queue = tf.FIFOQueue(capacity=self._num_images_per_cycle, dtypes=tf.float32, shapes=[4, 4])
+        self._affine_tforms_queue_allowstop = affine_tforms_queue.enqueue_many(
             [av4_utils.identity_matrices(num_threads*3)])
         self._affine_tforms_queue_enq = affine_tforms_queue.enqueue_many(lig_pose_tforms)
 
@@ -80,17 +80,22 @@ class SamplingAgent:
         rec_elem = tf.Variable([0],trainable=False, validate_shape=False)
         rec_coord = tf.Variable([[0.0,0.0,0.0]], trainable=False, validate_shape=False)
         self._tform = affine_tforms_queue.dequeue()
-        tformed_lig_coord,lig_pose_tform = av4_utils.affine_transform(lig_coord,self._tform)
+        tformed_lig_coord,lig_pose_tform = av4_utils.affine_transform(lig_coord, self._tform)
 
         self._lig_elem_plc = tf.placeholder(tf.int32)
         self._lig_coord_plc = tf.placeholder(tf.float32)
         self._rec_elem_plc = tf.placeholder(tf.int32)
         self._rec_coord_plc = tf.placeholder(tf.float32)
 
-        self._ass_lig_elem = tf.assign(lig_elem,self._lig_elem_plc, validate_shape=False, use_locking=True)
+        self._ass_lig_elem = tf.assign(lig_elem, self._lig_elem_plc, validate_shape=False, use_locking=True)
         self._ass_lig_coord = tf.assign(lig_coord, self._lig_coord_plc, validate_shape=False, use_locking=True)
         self._ass_rec_elem = tf.assign(rec_elem, self._rec_elem_plc, validate_shape=False, use_locking=True)
         self._ass_rec_coord = tf.assign(rec_coord, self._rec_coord_plc, validate_shape=False, use_locking=True)
+
+        self._lig_elem_shape = tf.shape(lig_elem)
+        self._lig_coord_shape = tf.shape(lig_coord)
+        self._rec_elem_shape = tf.shape(rec_elem)
+        self._rec_coord_shape = tf.shape(rec_coord)
 
 
         # Create batches of images from coordinates and elements.
@@ -108,7 +113,7 @@ class SamplingAgent:
                                    shapes=[[side_pixels,side_pixels,side_pixels], [4,4], [4,4], []])
         self._image_queue_deq = image_queue.dequeue()[0]
         self._image_queue_enq = image_queue.enqueue([complex_image, lig_pose_tform, cameraview, lig_RMSD])
-        self._queue_runner = av4_utils.QueueRunner(image_queue, [self._image_queue_enq]*num_threads)
+        self._queue_runner = av4_utils.QueueRunner(image_queue, [self._image_queue_enq] * num_threads)
         self._image_b, self._lig_pose_tform_b, self._cameraview_b, self._lig_RMSD_b = image_queue.dequeue_many(batch_size)
 
 
@@ -130,7 +135,7 @@ class SamplingAgent:
         r_tforms_cameraviews_queue = tf.FIFOQueue(capacity=train_batch_init_poses + train_batch_gen_poses,
                                                   dtypes=[tf.float32,tf.float32],
                                                   shapes=[[4,4],[4,4]])
-        self._r_tforms_and_cameraviews_queue_clean = r_tforms_cameraviews_queue.enqueue_many(
+        self._r_tforms_and_cameraviews_queue_allowstop = r_tforms_cameraviews_queue.enqueue_many(
             [av4_utils.identity_matrices(num_threads*3),
              av4_utils.identity_matrices(num_threads*3)])
         self._r_tforms_plc = tf.placeholder(tf.float32)
@@ -170,18 +175,14 @@ class SamplingAgent:
                       feed_dict={self._lig_elem_plc:my_lig_elem, self._lig_coord_plc:my_lig_coord,
                                  self._rec_elem_plc:my_rec_elem, self._rec_coord_plc:my_rec_coord})
         # re-initialize the evalutions class
-        evaluated = self.EvaluationsContainer()
-        print "shapes of the ligand and protein:", "unknown"
-#        print self.sess.run([tf.shape(self.lig_elements),                                                                   # TODO: this may be useful here
-#                             tf.shape(self.lig_coords),
-#                             tf.shape(self.rec_elements),
-#                            tf.shape(self.rec_coords)])
-
-
+        evaluated = self.EvaluationsContainer(self._logf)
+        self._logf("shapes of the ligand and protein:" + str(self.sess.run([self._lig_elem_shape,
+                                                                            self._lig_coord_shape,
+                                                                            self._rec_elem_shape,
+                                                                            self._rec_coord_shape])))
         # Evaluate all of the images of ligand and protein complexes in batches.
         # start threads to fill the queue
-        print "starting threads for the conformation sampler."
-        self.enqueue_thr = self._queue_runner.create_threads(self.sess, coord=self.coord, start=True, daemon=True)
+        self.enqueue_thr = self._queue_runner.create_threads(self.sess, self._logf, self.coord, start=True, daemon=True)
         # evaluate batch of images
         num_batches_per_cycle = self._num_images_per_cycle // self._batch_size
         for i in range(num_batches_per_cycle):
@@ -195,10 +196,10 @@ class SamplingAgent:
                                                       my_lig_pose_tform_b,
                                                       my_cameraview_b,
                                                       my_lig_RMSD_b)
-            print self.agent_name,
-            print "\tligand_atoms:",np.sum(np.array(my_image_b >7,dtype=np.int32)),
-            print "\tpositions evaluated:",lig_poses_evaluated,
-            print "\texamples per second:", "%.2f" % (self._batch_size / (time.time() - start))
+            self._logf(self.agent_name, stdout=True)
+            self._logf("\tligand_atoms:" + str(np.sum(np.array(my_image_b >7, dtype=np.int32))), True)
+            self._logf("\tpositions evaluated:" + str(lig_poses_evaluated), True)
+            self._logf("\texamples per second:" + str("%.2f" % (self._batch_size / (time.time() - start))) + "\n", True)
 
 
         # Select positively and negatively labeled images with the highest cost, and enqueue them into training queue
@@ -207,26 +208,26 @@ class SamplingAgent:
                                                                        remember_poses=300)
         # accurately terminate all threads without closing the queue (uses custom QueueRunner class)
         self.coord.request_stop()
-        self.sess.run(self._affine_tforms_queue_clean)
+        self.sess.run(self._affine_tforms_queue_allowstop)
         self.coord.join()
         self.coord.clear_stop()
-        av4_utils.dequeue_all(self.sess,self._tform)
-        av4_utils.dequeue_all(self.sess,self._image_queue_deq)
+        av4_utils.dequeue_all(self.sess, self._tform, self._logf, "affine_tforms_queue")
+        av4_utils.dequeue_all(self.sess, self._image_queue_deq, self._logf, "image_queue")
         # regenerate a selected batch of images using the same (empty) image queue
         # enqueue the regenerator
         self.sess.run([self._r_tforms_cameraviews_enq],
                       feed_dict={self._r_tforms_plc: sel_lig_tforms,
                                  self._r_cameraviews_plc: sel_cameraviews})
         # start threads to fill the regenerator queue
-        self._r_enqueue_thr = self._r_queue_runner.create_threads(self.sess, coord=self.coord, start=True, daemon=True)
+        self._r_enqueue_thr = self._r_queue_runner.create_threads(self.sess, self._logf, coord=self.coord, start=True, daemon=True)
         self.sess.run(self.pass_batch_to_the_training_queue)
         self.coord.request_stop()
         # accurately terminate all threads without closing the queue (using custom QueueRunner class)
-        self.sess.run(self._r_tforms_and_cameraviews_queue_clean)
+        self.sess.run(self._r_tforms_and_cameraviews_queue_allowstop)
         self.coord.join()
         self.coord.clear_stop()
-        av4_utils.dequeue_all(self.sess,self._r_tform)
-        av4_utils.dequeue_all(self.sess,self._image_queue_deq)
+        av4_utils.dequeue_all(self.sess, self._r_tform, self._logf, "_r_tforms_and_cameraviews_queue")
+        av4_utils.dequeue_all(self.sess,self._image_queue_deq, self._logf, "image_queue")
         return None
 
     class EvaluationsContainer:
@@ -235,7 +236,8 @@ class SamplingAgent:
         """
         # TODO: add a possibility to generate new matrices based on performed evaluations.
         # (aka genetic search in AutoDock)
-        def __init__(self):
+        def __init__(self,_logf):
+            self._logf = _logf
             self.preds = np.array([])
             self.costs = np.array([])
             self.lig_pose_transforms = np.array([]).reshape([0, 4, 4])
@@ -267,24 +269,32 @@ class SamplingAgent:
             self.cameraviews = self.cameraviews[order]
             self.lig_RMSDs = self.lig_RMSDs[order]
 
-            # Take examples for which the cost is highest.                                                              # TODO: bad - cost function should do the labeling
+            # take examples for which the cost is highest
             init_poses_idx = (np.where(self.lig_RMSDs < 0.01)[0])
             gen_poses_idx = (np.where(self.lig_RMSDs > 0.01)[0])
             sel_init_poses_idx = init_poses_idx[-cameraviews_initial_pose:]
             sel_gen_poses_idx = gen_poses_idx[-generated_poses:]
 
             # print a lot of statistics for debugging/monitoring purposes
-            # todo: print to file with agent name
-            # print "statistics sampled conformations:"
-            # var_list = {'lig_RMSDs':self.lig_RMSDs,'preds':self.preds,'costs':self.costs}
-            # av4_utils.describe_variables(var_list)
-            # print "statistics for selected (hardest) initial conformations"
-            # var_list = {'lig_RMSDs':self.lig_RMSDs[sel_init_poses_idx], 'preds':self.preds[sel_init_poses_idx],
-            #             'costs':self.costs[sel_init_poses_idx]}
-            # av4_utils.describe_variables(var_list)
-            # print "statistics for selected (hardest) generated conformations"
-            # var_list = {'lig_RMSDs':self.lig_RMSDs[sel_gen_poses_idx], 'preds':self.preds[sel_gen_poses_idx],
-            #             'costs':self.costs[sel_gen_poses_idx]}
-            # av4_utils.describe_variables(var_list)
+            self._logf("statistics sampled conformations:")
+            var_list = {'lig_RMSDs':self.lig_RMSDs,'preds':self.preds,'costs':self.costs}
+            self._logf(av4_utils.var_stats(var_list))
+            self._logf("statistics for selected (hardest) initial conformations")
+            var_list = {'lig_RMSDs':self.lig_RMSDs[sel_init_poses_idx], 'preds':self.preds[sel_init_poses_idx],
+                        'costs':self.costs[sel_init_poses_idx]}
+            self._logf(av4_utils.var_stats(var_list))
+            self._logf("statistics for selected (hardest) generated conformations")
+            var_list = {'lig_RMSDs':self.lig_RMSDs[sel_gen_poses_idx], 'preds':self.preds[sel_gen_poses_idx],
+                        'costs':self.costs[sel_gen_poses_idx]}
+            self._logf(av4_utils.var_stats(var_list))
             sel_idx = np.hstack([sel_init_poses_idx,sel_gen_poses_idx])
             return self.lig_pose_transforms[sel_idx],self.cameraviews[sel_idx]
+
+
+    def _logf(self, message, stdout=False):
+        log_file = (FLAGS.summaries_dir + "/" + FLAGS.run_name + "_logs/" + self.agent_name + ".log")
+        with open(log_file, 'a') as fout:
+            message = str(message)
+            fout.write(message)
+        if stdout:
+            print message,

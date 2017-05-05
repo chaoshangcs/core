@@ -19,7 +19,7 @@ class SamplingAgentonGPU:
         self.lig_file, _, _, self.lig_elem, self.lig_coord, self.rec_elem, self.rec_coord = \
             av4_input.read_receptor_and_ligand(filename_queue=self.filename_queue, epoch_counter=tf.constant(0))  # FIXME: change epoch counter
 
-        print "SamplingAgentonGPU:",agent_name,"successfully initialized on device:",gpu_name
+        print "SamplingAgentonGPU:",agent_name,"successfully initialized on device:", gpu_name
 
     def _count_example(self):
         if (self.sampling_coord.run_samples is not None) and (self.sampling_coord.run_samples > 0):
@@ -75,9 +75,12 @@ class GradientDescendMachine:
         filename_queue,self.ex_in_database = av4_input.index_the_database_into_queue(FLAGS.database_path, shuffle=True)
 
         # create a very large queue of images for central parameter server
-        self.training_queue = tf.RandomShuffleQueue(capacity=1000000,min_after_dequeue=40000,dtypes=[tf.float32,tf.float32],shapes=[[side_pixels,side_pixels,side_pixels],[]])
+        # TODO: make capacity adjustable
+        self.training_queue = tf.RandomShuffleQueue(capacity=1000000, min_after_dequeue=10000,
+                                                    dtypes=[tf.float32,tf.float32],
+                                                    shapes=[[side_pixels,side_pixels,side_pixels],[]])
         self.training_queue_size = self.training_queue.size()
-        tf.summary.scalar("training queue size",self.training_queue_size)
+        tf.summary.scalar("training_queue_size",self.training_queue_size)
 
         # create a way to train a network
         image_batch,lig_RMSD_batch = self.training_queue.dequeue_many(100)
@@ -86,13 +89,11 @@ class GradientDescendMachine:
         with tf.name_scope("network"):
             logits = av4_networks.max_net.compute_output(image_batch, self.keep_prob, FLAGS.batch_size)
 
-
         self.cost = av4_cost_functions.cross_entropy_with_RMSD(logits=logits,lig_RMSDs=lig_RMSD_batch)
         tf.summary.scalar('cost',tf.reduce_mean(self.cost))
 
         with tf.name_scope("Adam_optimizer"):
             self.train_step_run = tf.train.AdamOptimizer(1e-4).minimize(self.cost)
-
 
 
         # configure sampling
@@ -157,8 +158,13 @@ class GradientDescendMachine:
         while True:
 
             if (self.global_step % 100 == 99):
-                self.saver.save(self.sess, FLAGS.summaries_dir + '/' + str(FLAGS.run_name) + "_netstate/saved_state", global_step=self.global_step)
-                _,my_summaries, my_cost,my_training_queue_size = self.sess.run([self.train_step_run,self.merged_summaries, self.softmax_RMSD, self.training_queue_size], feed_dict={self.keep_prob:0.5})
+                self.saver.save(self.sess, FLAGS.summaries_dir + '/' + str(FLAGS.run_name) + "_netstate/saved_state",
+                                global_step=self.global_step)
+                _,my_summaries, my_cost,my_training_queue_size = self.sess.run([self.train_step_run,
+                                                                                self.merged_summaries,
+                                                                                self.cost,
+                                                                                self.training_queue_size],
+                                                                               feed_dict={self.keep_prob:0.5})
                 print "global step:", self.global_step, "softmax RMSD cost:", my_cost
 
                 self.summary_writer.add_summary(my_summaries, self.global_step)

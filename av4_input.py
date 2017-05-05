@@ -111,7 +111,7 @@ def read_receptor_and_ligand(filename_queue,epoch_counter):
     return ligand_file,tf.squeeze(epoch_counter),tf.squeeze(label),ligand_elements,tf.squeeze(ligand_coords),receptor_elements,tf.squeeze(multiframe_receptor_coords)
 
 
-def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size,cameraview=None):
+def complex_coords_to_image(ligand_elements,ligand_coords,receptor_elements,receptor_coords,side_pixels,pixel_size,cameraview=None):
     """Take coordinates and elements of protein and ligand and convert them into an image.
     Return image with one dimension so far."""
 

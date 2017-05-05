@@ -334,19 +334,21 @@ def identity_matrices(num_frames):
 
 
 
-def describe_variables(vals):
+def var_stats(vals):
     "Take a dictionary of variables and variable names, and prints statistics."
-    print "================================================================================"
+    message = ""
+    message += "================================================================================\n"
     for val in vals:
-        print "val:",val
-        print vals[val]
-        time.sleep(0.1)
+        message+= ("val:"+str(val))
+        message+=(str((vals[val]))+"\n")
     for val in vals:
-        print val,"\tlen:",len(vals[val]), "min:","%.3f" %  min(vals[val]), "max:","%.3f" % max(vals[val]),"ave:",
-        print "%.3f" % np.average(vals[val]), "median:", "%.3f" % np.sort(vals[val], axis=0)[len(vals[val])//2],
-        print "first:","%.3f" % vals[val][0], "last:","%.3f" % vals[val][-1],
-        print "middle (no formatting):",vals[val][len(vals[val])//2]
-    print "================================================================================"
+        message+=str(val)+"\tlen:"+str(len(vals[val]))+ str("min:" + "%.3f" % min(vals[val])) \
+                 + str("max:" + "%.3f" % max(vals[val])) + str("ave:" + "%.3f" % np.average(vals[val])) \
+                 + str("median:" + "%.3f" % np.sort(vals[val], axis=0)[len(vals[val])//2]) \
+                 + str("first:" + "%.3f" % vals[val][0]) + str("last:" + "%.3f" % vals[val][-1]) \
+                 + str("middle (no formatting):" + str(vals[val][len(vals[val])//2]) + "\n")
+    message+="================================================================================\n"
+    return message
 
 
 
@@ -609,7 +611,7 @@ class QueueRunner(object):
       logging.vlog(1, "Ignored exception: %s", str(e))
   # pylint: enable=broad-except
 
-  def create_threads(self, sess, coord=None, daemon=False, start=False):
+  def create_threads(self, sess, _logf, coord=None, daemon=False, start=False):
     """Create threads to run the enqueue ops for the given session.
 
     This method requires a session in which the graph was launched.  It creates
@@ -659,8 +661,10 @@ class QueueRunner(object):
       if daemon:
         t.daemon = True
       if start:
+        log_message = ""
         t.start()
-        print "[tr:",started_threads,"]",
+        log_message += str("[tr:" + str(started_threads) + "]")
+        _logf(log_message)
         started_threads+=1
 
 #    time.sleep(0.25)
@@ -705,12 +709,11 @@ class QueueRunner(object):
 
 
 
-
-def dequeue_all(sess,dequeue_op):
+def dequeue_all(sess,dequeue_op, _logf, op_name=None):
+    _logf(str(op_name) + ":starting to deque all examples")
     try:
         while True:
-            print ".",
             sess.run(dequeue_op, options=tf.RunOptions(timeout_in_ms=500))
+            _logf(".")
     except tf.errors.DeadlineExceededError:
-#        print "[",sess.run(queue.size()), "]"
-        print "queue should be empty ------------------- I can't believe this is an operation on the graph"
+        _logf(str(op_name) + ":queue empty")

@@ -37,7 +37,7 @@ class FLAGS:
     # optional saved session: network from which to load variable states
     saved_session = None
     # it's a good tradition to name the run with a number (easy to group)
-    run_name = '14_test'
+    run_name = '2_test'
 
     # TECHNICAL (DO NOT MODIFY) PARAMETERS
     # main session for multiagent training
