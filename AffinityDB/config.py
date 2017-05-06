@@ -94,7 +94,7 @@ Folders
 script_path = sys.path[0]
 #base folder for all the output
 #database_root = os.path.join(script_path, '..', 'AffinityDB')
-database_root = '/home/xander/affinityDB/aff_test_v2'
+database_root = '/home/xander/affinityDB/aff_test_v3'
 
 
 db_path =os.path.join(database_root, db_name)
@@ -113,8 +113,8 @@ smina = '/home/xander/Program/smina/smina.static'
 
 # pdb_target_list
 #list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
-#list_of_PDBs_to_download = '/home/xander/affinityDB/aff_test/affinity_test.txt'
-list_of_PDBs_to_download = os.path.join(sys.path[0], 'pdb_list','pdb_list.txt')
+list_of_PDBs_to_download = '/home/xander/affinityDB/aff_test/affinity_test.txt'
+#list_of_PDBs_to_download = os.path.join(sys.path[0], 'pdb_list','pdb_list.txt')
 
 
 # example scoring
@@ -165,6 +165,15 @@ native_contact_pm = {
 }
 
 
-binding_affinity_files = {
-    'pdbbind':os.path.join(sys.path[0], 'binding_affinity_dbs','INDEX_general_PL.2016')
+bind_pm = {
+    'pdbbind':{
+        'index':os.path.join(sys.path[0],'bind_index','INDEX_general_PL.2016'),
+        'parse_func':'pdbbind'
+    },
+    'bindmoad':{
+        'index':os.path.join(sys.path[0],'bind_index','every.csv'),
+        'parse_func':'bindmoad'
+    }
 }
+
+

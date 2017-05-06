@@ -14,6 +14,8 @@ import re
 import prody
 import config
 import pandas as pd 
+import cPickle
+import tensorflow as tf 
 sys.path.append('..')
 from av4_atomdict import atom_dictionary
 
@@ -25,7 +27,16 @@ def atom_to_number(atomname):
     atomic_tag_number = atom_dictionary.ATM[atomname.lower()]
     return atomic_tag_number
 
-def save_av4(filepath,labels,elements,multiframe_coords):
+def _int_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+
+def _float_feature(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+def _byte_feature(value):
+    return tf.train.Feature(byte_list=tf.train.BytesList(value=value))
+
+def save_with_format(filepath,labels,elements,multiframe_coords,d_format='tfr'):
     labels = np.asarray(labels,dtype=np.float32)
     elements = np.asarray(elements,dtype=np.int32)
     multiframe_coords = np.asarray(multiframe_coords,dtype=np.float32)
@@ -42,17 +53,43 @@ def save_av4(filepath,labels,elements,multiframe_coords):
             raise Exception('Number labels is not equal to the number of coordinate frames')
 
     number_of_examples = np.array([len(labels)], dtype=np.int32)
-    av4_record = number_of_examples.tobytes()
-    av4_record += labels.tobytes()
-    av4_record += elements.tobytes()
-    av4_record += multiframe_coords.tobytes()
-    f = open(filepath, 'w')
-    f.write(av4_record)
-    f.close()
 
-def convert_data_to_av4(base_dir, rec_path, lig_path, doc_path, position, affinity):
+    if d_format == 'av4':
+        av4_record = number_of_examples.tobytes()
+        av4_record += labels.tobytes()
+        av4_record += elements.tobytes()
+        av4_record += multiframe_coords.tobytes()
+        f = open(filepath, 'w')
+        f.write(av4_record)
+        f.close()
 
-    dest_dir = os.path.join(base_dir, _receptor(rec_path))
+    
+    elif d_format == 'pkl':
+        dump_cont = [number_of_examples,labels, elements, multiframe_coords]
+        cPickle.dump(dump_cont,open(pkl_dest,'w'))
+
+    elif d_format == 'rtf':
+        writer = tf.python_io.TFRecordWriter(tfr_dest)
+
+        example = tf.train.Example(
+            features=tf.train.Features(
+                feature={
+                    'number_of_examples': _int_feature(number_of_examples),
+                    'labels': _float_feature(labels),
+                    'elements': _int_feature(elements),
+                    'multiframe_coords': _float_feature(multiframe_coords.reshape(-1))
+                }
+            )
+        )
+        serialized = example.SerializeToString()
+        writer.write(serialized)
+
+
+
+def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affinity, d_format):
+
+   
+    dest_dir = os.path.join(base_dir,d_format, _receptor(rec_path))
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
 
@@ -88,15 +125,15 @@ def convert_data_to_av4(base_dir, rec_path, lig_path, doc_path, position, affini
     except:
         return None, None
     
-    rec_name = os.path.basename(rec_path).replace('.pdb','.av4')
-    lig_name = os.path.basename(lig_path).replace('.pdb','.av4')
+    rec_name = os.path.basename(rec_path).replace('.pdb','.%s' % d_format)
+    lig_name = os.path.basename(lig_path).replace('.pdb','.%s' % d_format)
     
     
-    av4_rec_path = os.path.join(dest_dir,rec_name)
-    av4_lig_path = os.path.join(dest_dir,lig_name)
-    save_av4(av4_rec_path,[0], receptor_elements, prody_receptor.getCoords())
-    save_av4(av4_lig_path, labels , ligand_elements, ligand_coords)
-    return av4_rec_path, av4_lig_path
+    rec_path = os.path.join(dest_dir,rec_name)
+    lig_path = os.path.join(dest_dir,lig_name)
+    save_with_format(rec_path,[0], receptor_elements, prody_receptor.getCoords(), d_format)
+    save_with_format(lig_path, labels , ligand_elements, ligand_coords, d_format)
+    return rec_path, lig_path
 
 class table(pd.DataFrame):
     def apply_rest(self, key, val):
@@ -150,25 +187,103 @@ class table(pd.DataFrame):
 
         return self
 
-class retrive_av4:
+class retrive_data:
 
-    def __init__(self, folder_name):
+    def __init__(self):
         
-        self.folder_name = folder_name
-        self.export_dir = os.path.join(config.export_dir, folder_name)
-        while os.path.exists(self.export_dir):
-            timestr = time.strftime('%m_%d_%H', time.gmtime())
-        
-            self.export_dir = self.export_dir + '_' + timestr
-
+        # table for available ligand
+        # columns : ['receptor','chain','resnum', 'resname'] + other
+        # path of receptor : [receptor_folder]/[receptor]/[receptor]_[chain]_[resnum]_[resname]_receptor.pdb
+        # path of ligand   : [ligand_folder]/[receptor]/[receptor]_[chain]_[resnnum]_[resname]_ligand.pdb
+        # path of docked ligand : [docked_folder]/[receptor]/[receptor]_[chain]_[resnum]_[resname]_ligand.pdb
         self.ligand = None
+        
+        # table for available position 
+        # columns : ['receptor','chain','resnum','resname','position'] + other
         self.position = None
+        
+        # where can get splited receptor
+        # e.g. 2_splited_receptor
         self.receptor_folder = None 
+        
+        # where can get splited ligand
+        # e.g. 3_splited_ligand
         self.ligand_folder = None 
+        
+        # where can get the docked ligand
+        # e.g. 4_docked
         self.docked_folder = None 
+        
+        # log_affinity or norm_affinity
+        # it will be the label for the ligand
         self.affinity_key = None
 
+    def __and__(self, other):
+        
+        assert self.receptor_folder == other.receptor_folder
+        assert self.ligand_folder == other.ligand_folder 
+        assert self.docked_folder == other.docked_folder \
+                or self.docked_folder == None \
+                or other.docked_folder == None
+
+        assert self.affinity_key == other.affinity_key
+
+        if self.ligand is None:
+            self.ligand = other.ligand 
+        elif other.ligand is not None:
+            self.ligand = self.ligand and other.ligand 
+        
+        if self.position is None:
+            self.position = other.position
+        elif other.position is not None:
+            self.position = self.position and other.position 
+        
+        if self.docked_folder is None:
+            self.docked_folder = other.docked_folder
+
+        return self 
+
+    def __or__(self, other):
+        
+        assert self.receptor_folder == other.receptor_folder
+        assert self.ligand_folder == other.ligand_folder
+                assert self.docked_folder == other.docked_folder \
+                or self.docked_folder == None \
+                or other.docked_folder == None
+
+        assert self.affinity_key == other.affinity_key
+
+        if self.ligand is None:
+            self.ligand = other.ligand 
+        elif other.ligand is not None:
+            self.ligand = self.ligand or other.ligand 
+        
+        if self.position is None:
+            self.position = other.position
+        elif other.position is not None:
+            self.position = self.position or other.position 
+        
+        if self.docked_folder is None:
+            self.docked_folder = other.docked_folder
+
+        return self         
+
+    def same(self):
+        
+        new = retrive_data()
+        new.receptor_folder = self.receptor_folder
+        new.ligand_folder = self.ligand_folder
+        new.docked_folder = self.docked_folder
+        new.ligand = self.ligand
+        new.position = self.position
+        new.affinity_key = self.affinity_key
+
+        return new
+
+
     def receptor(self, receptor_idx):
+        # load available receptor from table with idx: receptor_idx
+
         _, _, df = db.get_success_data(receptor_idx, dataframe=True)
         primary_key = db.primary_key_for(receptor_idx)
         df = df[primary_key]
@@ -180,9 +295,13 @@ class retrive_av4:
 
         folder_name = db.get_folder(receptor_idx)
         self.receptor_folder = '{}_{}'.format(receptor_idx, folder_name)
+        
+        return self
 
 
     def crystal(self, crystal_idx):
+        # load available ligand from table with idx: crystal_idx
+
         _, _, df  = db.get_success_data(crystal_idx, dataframe=True)
         primary_key = db.primary_key_for(crystal_idx)
         df = df[primary_key]
@@ -196,7 +315,11 @@ class retrive_av4:
         folder_name  = db.get_folder(crystal_idx)
         self.ligand_folder = '{}_{}'.format(crystal_idx, folder_name)
 
+        return self
+
     def docked(self, docked_idx):
+        # load available docked ligand from table with idx: docked_idx
+
         _, _, df = db.get_success_data(docked_idx, dataframe=True)
         primary_key = db.primary_key_for(docked_idx)
         df = df[primary_key]
@@ -210,7 +333,12 @@ class retrive_av4:
         folder_name = db.get_folder(docked_idx)
         self.docked_folder = '{}_{}'.format(docked_idx, folder_name )
 
+        return self
+
     def overlap(self, overlap_idx, rest):
+        # select position with overlap value in restriction: rest
+        # e.g. rest=[0.1,0.5] overlap ratio between 0.1 and 0.5
+
         _, _, df = db.get_success_data(overlap_idx, dataframe=True)
         primary_key = db.primary_key_for(overlap_idx)
         df = df[primary_key]
@@ -221,9 +349,11 @@ class retrive_av4:
         else:
             self.position = self.docked & df 
 
-
+        return self
 
     def rmsd(self, rmsd_idx, rest):
+        # select position with rmsd value in restriction: rest
+        # e.g. rest=[None, 2] rmsd ration between minimum and 2
         
         _, _, df = db.get_success_data(crystal_idx, dataframe=True)
         primary_key = db.primary_key_for(rmsd_idx)
@@ -234,9 +364,14 @@ class retrive_av4:
             self.position = df
         else:
             self.position = self.position & df
-        
+
+        return self
+
     def native_contact(self, native_contact_idx, rest):
-        
+        # select position with native contact ration in restriction: rest
+        # e.g. rest=None  no restriction on native contact
+
+
         _, _, df = db.get_success_data(native_contact_idx, dataframe=True)
         primary_key = db.primary_key_for(native_contact_idx)
         df = df[primary_key + ['native_contact']]
@@ -247,7 +382,10 @@ class retrive_av4:
         else: 
             self.position = self.position & df 
 
+        return self
+
     def norm_affinity(self, affinity_idx, rest):
+        # select available ligand with norm affinity value in restriction: rest
         
         self.affinity_key = 'norm_affinity'
         _, _, df = db.get_success_data(affinity_idx, dataframe=True)
@@ -260,8 +398,11 @@ class retrive_av4:
         else:
             self.ligand = self.ligand & df 
 
+        return self
+
     def log_affinity(self, affinity_idx, rest):
-        
+        # select available receptor with log affinity value in restriction: rest
+
         self.affinity_key = 'log_affinity'
         _, _, df = db.get_success_data(affinity_idx, dataframe=True)
         primary_key = db.primary_key_for(affinity_idx)
@@ -273,14 +414,30 @@ class retrive_av4:
         else:
             self.ligand = self.ligand & df 
 
+        return self
 
+    def export_table(self):
+        if self.position is None:
+            return self.ligand
+        else:
+            return self.ligand and self.position
 
-    def get_receptor_and_ligand(self):
+    def export_data_to(self, folder_name, d_format):
+        # export data to the folder : folder_name
+        # export data format
+        #   'pkl': python pikle
+        #   'av4': affinity build-in binary format
+        #   'tfr': tensorflow record format
+        
+        if not d_format in ['pkl','av4','tfr']:
+            raise Exception("Unexpected format {}, available format: {}".\
+                                format(d_format, ['pkl','av4','tfr']))
+        
+        export_dir = os.path.join(config.export_dir, folder_name)
         
         if self.position is None:
             valid = self.ligand 
         
-            
             collection = []
             for i in range(len(valid)):
                 item = valid.ix[i]
@@ -311,9 +468,7 @@ class retrive_av4:
             
         
         else:
-            valid = self.ligand and self.position  
-
-            
+            valid = self.ligand and self.position     
             collection =[]
             
             for keys, group in valid.groupby(['receptor','chain','resnum','resname', aff_key]):
@@ -348,23 +503,24 @@ class retrive_av4:
                                    affinity])
 
         #print(set(map(lambda x:len(x),collection)))
-        export_table_dir = os.path.join(self.export_dir,'index')
+        export_table_dir = os.path.join(export_dir,'index')
         if not os.path.exists(export_table_dir):
             os.makedirs(export_table_dir)
 
         df = pd.DataFrame(collection,columns=['receptor','ligand','docked','position','affinity'])
         df.to_csv(os.path.join(export_table_dir,'raw.csv'), index=False, sep='\t')
 
-        data_export_dir = os.path.join(self.export_dir,'data')
+        data_export_dir = os.path.join(export_dir,'data')
 
         index = []
         for receptor, ligand, docked, position, aff in collection:
-            rec_path, lig_path = convert_data_to_av4(data_export_dir,
+            rec_path, lig_path = convert_and_save_data(data_export_dir,
                                                      receptor,
                                                      ligand,
                                                      docked,
                                                      position,
-                                                     aff)
+                                                     aff,
+                                                     d_format)
             if rec_path is None:
                 continue
             index.append([rec_path, lig_path, affinity])
@@ -374,13 +530,26 @@ class retrive_av4:
 
 
 
-def test():
+
+def example1():
     
-    ra = retrive_av4('av4') # output's filder name
+    ra = retrive_data() # output's filder name
     ra.receptor(2) # splited receptor table sn
     ra.crystal(3) # splited ligand table sn
     ra.log_affinity(4, None) # affinity table idx , [minimum, maximum]
-    ra.get_receptor_and_ligand() # convert file into av4 format
+    
+    #ra.export_data_to('test_1','av4') # convert file into av4 format
+    
+    table = ra.export_table()
+
+def example2():
+
+    rb = retrive_data().recpeotr(2).crystal(3).norm_affinity(4,None)
+    rc = rb.same().overlap(5,[None,0.5])
+    rd = rb.same().overlap(5,(0.5,None)).rmsd(6,[None,2])
+    re = rc or rd 
+    table = re.export_table()
+
 
 if __name__ == '__main__':
-    test()
+    print 'retrive_v2'

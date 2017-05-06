@@ -16,7 +16,7 @@ import prody
 import config
 from config import data_dir
 from db_v2 import AffinityDatabase
-from parse_binding_DB import read_PDB_bind
+from parse_binding_DB import parse_bind_func
 
 db = AffinityDatabase()
 
@@ -372,13 +372,18 @@ def native_contact(table_idx, param, input_data):
         db.insert(table_idx, records)
 
 def binding_affinity(table_idx, param, input_data):
+    
     try:
-        pdb_bind_index = param['pdb_bind_index']
-        pdb_bind_index = config.binding_affinity_files[pdb_bind_index]
-        PDB_bind = read_PDB_bind(pdb_bind_index=pdb_bind_index)
+        bind_param = param['bind_param']
+        bind_index = bind_param['index']
+    
+        parse_func = bind_param['parse_func'] 
+        parse_func = parse_bind_func[parse_func]
+
+        PDB_bind = parse_func(bind_index)
         records = [[PDB_bind.pdb_names[i].upper(), PDB_bind.ligand_names[i],
                  PDB_bind.log_affinities[i], PDB_bind.normalized_affinities[i],
-                 1, 'success']
+                 PDB_bind.states[i], PDB_bind.comments[i]]
                  for i in range(len(PDB_bind.pdb_names))]
         db.insert(table_idx, records)
     except Exception as e:

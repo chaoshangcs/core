@@ -1,7 +1,112 @@
 import numpy as np
 import time
 import re,math
+import csv
 
+def read_binding_moad(binding_moad_index):
+    class PDB_moad:
+        num_records = 0
+        num_exception = 0
+        pdb_names = []
+        ligand_names = []
+        binding_affinityes = []
+        log_affinities = []
+        normalized_affinities = []
+        exceptions = []
+        states = []
+        comments = []
+
+
+    def parse_entry(entry):
+        receptor, res, attr, measure, op, value, unit = entry
+        if not attr == 'valid':
+            return
+        if not measure in ['Kd', 'Ki', 'ic50']:
+            return
+        if not op in ['=','~']:
+            return
+
+        resnames, chain, resnum = res.split(':')
+        resnames = resnames.split(' ')
+
+        try:
+            value = float(value)
+        
+
+            if unit.lower() == 'fm':
+                log_affinity = np.log(value) - np.log(10.0**15)
+            elif unit.lower() == 'pm':
+                log_affinity = np.log(value) - np.log(10.0**12)
+            elif unit.lower() == 'nm':
+                log_affinity = np.log(value) - np.log(10.0**9)
+            elif unit.lower() == 'um':
+                log_affinity = np.log(value) - np.log(10.0**6)
+            elif unit.lower() == 'mm':
+                log_affinity = np.log(value) - np.log(10.0**3)
+            elif unit.lower() == 'm':
+                log_affinity = np.log(value)
+            else:
+                raise Exception("unexpected unit {}".format(ligand))
+
+            state = 1
+            comment = 'success'
+        
+        except Exception as e:
+            #PDB_moad.exceptions.append(e)
+            log_affinity = 0
+            state = 0
+            comment = str(e)
+
+
+       
+
+        for resname in resnames:
+            PDB_moad.pdb_names.append(receptor.upper())
+            PDB_moad.ligand_names.append(resname.upper())
+            PDB_moad.log_affinities.append(log_affinity)
+            PDB_moad.states.append(state)
+            PDB_moad.comments.append(comment)
+            PDB_moad.num_records +=1
+            if state ==0:
+                PDB_moad.num_exception +=1
+                PDB_moad.exceptions.append(e)
+            
+
+    with open(binding_moad_index) as fin:
+        while(not fin.readline() == '"========================="\n'):
+            continue
+    
+        csv_reader = csv.reader(fin)
+        receptor = []
+        for row in csv_reader:
+
+            if len(row) == 2:
+                # smile string and rest
+                pass
+            elif not row[0]== '':
+                # first columns like '2.6.1.62'
+                pass
+            elif not row[2] == '':
+                # get receptor
+                receptor = row[2]
+            else:
+                try:
+                    parse_entry([receptor.upper()] + row[3:9])
+                except Exception as e:
+                    PDB_moad.num_exception +=1
+                    PDB_moad.exceptions.append(e)
+                PDB_moad.num_records +=1
+
+    max_log_affinity = np.log(10.**0)
+    min_log_affinity = np.log(10.**-18)
+
+    PDB_moad.normalized_affinities = (PDB_moad.log_affinities - min_log_affinity)\
+    /(max_log_affinity - min_log_affinity)
+
+    print "parsing finished. num records: {:<8d} num exceptions: {:<8d}"\
+    .format(PDB_moad.num_records, PDB_moad.num_exception)
+
+    return PDB_moad
 
 def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbind/INDEX_general_PL.2016"):
     class PDB_bind:
@@ -15,12 +120,17 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
         log_affinities = []
         normalized_affinities = []
         exceptions = []
+        states = []
+        comments = []
 
     with open(pdb_bind_index) as f:
         [f.readline() for _ in range(6)]
         file_text = f.readlines()
 
     for line in file_text:
+        pdb_name = re.split("[\s]+", line)[0]
+        ligand_name = re.split("[\s]+", line)[6]
+        
         try:
 
             # sanity check
@@ -33,17 +143,18 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
             if re.compile(".*Nonstandard assay.*").match(line):
                 raise Exception('not standard assay')
 
-            pdb_name = re.split("[\s]+", line)[0]
+            
 
             if not re.compile("^[a-zA-Z0-9][a-zA-Z0-9][a-zA-Z0-9][a-zA-Z0-9]$").match(pdb_name):
                 raise Exception('PDB name in the record is impossible')
 
-            ligand_name = re.split("[\s]+", line)[6]
+            
             if not re.compile("\([a-zA-Z0-9][a-zA-Z0-9][a-zA-Z0-9]\)").match(ligand_name):
                 if not re.compile("\([a-zA-Z0-9][a-zA-Z0-9][a-zA-Z0-9]-[a-zA-Z0-9][a-zA-Z0-9][a-zA-Z0-9]\)").match(ligand_name):
                     raise Exception('ligand name is impossible')
 
 
+            
             affinity_record = re.split("[\s]+", line)[3]
 
             # split the lines of the PDB bind file record
@@ -63,8 +174,7 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
 
             # convert affinities into normalized affinities
             # fm = -15; pm = -12, nm = -9; uM = -6; mM = -3;
-            PDB_bind.pdb_names.append(pdb_name)
-            PDB_bind.ligand_names.append(ligand_name.strip("(").strip(")"))
+            
             if re.compile("fm|fM|Fm").match(molarity):
                 log_affinity = np.log(float(affinity_number)) - np.log(10.0 ** 15)
             elif re.compile("pm|Pm|pM").match(molarity):
@@ -75,12 +185,25 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
                 log_affinity = np.log(float(affinity_number)) - np.log(10.0 ** 6)
             elif re.compile("mM|Mm|mm"):
                 log_affinity = np.log(float(affinity_number)) - np.log(10.0 ** 3)
-            PDB_bind.log_affinities.append(log_affinity)
-
+            
+            state = 1
+            comment = 'success'    
 
         except Exception as e:
             PDB_bind.num_exceptions += 1
             PDB_bind.exceptions.append(e)
+
+            state = 0
+            comment = str(e)
+            log_affinity = 0
+
+
+        PDB_bind.pdb_names.append(pdb_name)
+        PDB_bind.ligand_names.append(ligand_name.strip("(").strip(")"))
+        PDB_bind.log_affinities.append(log_affinity)
+        PDB_bind.states.append(state)
+        PDB_bind.comments.append(comment)
+
         PDB_bind.num_records += 1
 
     max_log_affinity = np.log(10.**0)
@@ -88,6 +211,13 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
     PDB_bind.normalized_affinities = (PDB_bind.log_affinities - min_log_affinity) / (max_log_affinity - min_log_affinity)
     print "parsing finished. num records:",PDB_bind.num_records,"num exceptions:",PDB_bind.num_exceptions
     return PDB_bind
+
+
+parse_bind_func = {
+    'pdbbind':read_PDB_bind,
+    'bindmoad':read_binding_moad
+}
+
 
 
 if __name__ == '__main__':

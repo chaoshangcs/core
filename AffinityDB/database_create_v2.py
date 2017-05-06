@@ -373,14 +373,15 @@ def db_create():
         if FLAGS.param is None:
             raise Exception('param required')
 
-        dock_param = FLAGS.param
-        if not dock_param in config.binding_affinity_files.keys():
-            raise Exception('No binidng affinity file for key {} in config\n'.format(dock_param)\
-                             + 'Available choices are {}'.format(str(config.binding_affinity_files.keys())))
+        bind_param = FLAGS.param
+        if not bind_param in config.bind_pm.keys():
+            raise Exception('No binidng affinity file for key {} in config\n'.format(bind_param)\
+                             + 'Available choices are {}'.format(str(config.bind_pm.keys())))
 
+        
         table_param = {
             'func':'binding_affinity',
-            'pdb_bind_index':dock_param
+            'bind_param': config.bind_pm[bind_param]
         }
 
     else:
