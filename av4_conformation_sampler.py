@@ -6,7 +6,7 @@ from av4_config import FLAGS
 import av4_networks
 import av4_utils
 import av4_cost_functions
-
+import logging
 
 
 class SamplingAgent:
@@ -46,6 +46,7 @@ class SamplingAgent:
                  agent_name,
                  gpu_name,
                  training_queue,
+                 logger,
                  side_pixels=FLAGS.side_pixels,
                  pixel_size=FLAGS.pixel_size,
                  batch_size=FLAGS.batch_size,
@@ -62,6 +63,7 @@ class SamplingAgent:
         self.sess = sess
         self.coord = tf.train.Coordinator()
         self._batch_size = batch_size
+        self.logger = logger
 
         # Set up affine transform queue with the ligand positions.
         lig_pose_tforms = tf.concat([av4_utils.identity_matrices(initial_pose_evals),
@@ -175,14 +177,14 @@ class SamplingAgent:
                       feed_dict={self._lig_elem_plc:my_lig_elem, self._lig_coord_plc:my_lig_coord,
                                  self._rec_elem_plc:my_rec_elem, self._rec_coord_plc:my_rec_coord})
         # re-initialize the evalutions class
-        evaluated = self.EvaluationsContainer(self._logf)
-        self._logf("shapes of the ligand and protein:" + str(self.sess.run([self._lig_elem_shape,
-                                                                            self._lig_coord_shape,
-                                                                            self._rec_elem_shape,
-                                                                            self._rec_coord_shape])))
+        evaluated = self.EvaluationsContainer(self.logger)
+        self.logger.info("shapes of the ligand and protein:" + str(self.sess.run([self._lig_elem_shape,
+                                                                                  self._lig_coord_shape,
+                                                                                  self._rec_elem_shape,
+                                                                                  self._rec_coord_shape])))
         # Evaluate all of the images of ligand and protein complexes in batches.
         # start threads to fill the queue
-        self.enqueue_thr = self._queue_runner.create_threads(self.sess, self._logf, self.coord, start=True, daemon=True)
+        self.enqueue_thr = self._queue_runner.create_threads(self.sess, self.logger, self.coord, start=True, daemon=True)
         # evaluate batch of images
         num_batches_per_cycle = self._num_images_per_cycle // self._batch_size
         for i in range(num_batches_per_cycle):
@@ -196,10 +198,10 @@ class SamplingAgent:
                                                       my_lig_pose_tform_b,
                                                       my_cameraview_b,
                                                       my_lig_RMSD_b)
-            self._logf(self.agent_name, stdout=True)
-            self._logf("\tligand_atoms:" + str(np.sum(np.array(my_image_b >7, dtype=np.int32))), True)
-            self._logf("\tpositions evaluated:" + str(lig_poses_evaluated), True)
-            self._logf("\texamples per second:" + str("%.2f" % (self._batch_size / (time.time() - start))) + "\n", True)
+            # write run information to the log file
+            self.logger.info("\tligand_atoms:" + str(np.sum(np.array(my_image_b >7, dtype=np.int32))))
+            self.logger.info("\tpositions evaluated:" + str(lig_poses_evaluated))
+            self.logger.info("\texamples per second:" + str("%.2f" % (self._batch_size / (time.time() - start))) + "\n")
 
 
         # Select positively and negatively labeled images with the highest cost, and enqueue them into training queue
@@ -211,23 +213,23 @@ class SamplingAgent:
         self.sess.run(self._affine_tforms_queue_allowstop)
         self.coord.join()
         self.coord.clear_stop()
-        av4_utils.dequeue_all(self.sess, self._tform, self._logf, "affine_tforms_queue")
-        av4_utils.dequeue_all(self.sess, self._image_queue_deq, self._logf, "image_queue")
+        av4_utils.dequeue_all(self.sess, self._tform, self.logger, "affine_tforms_queue")
+        av4_utils.dequeue_all(self.sess, self._image_queue_deq, self.logger, "image_queue")
         # regenerate a selected batch of images using the same (empty) image queue
         # enqueue the regenerator
         self.sess.run([self._r_tforms_cameraviews_enq],
                       feed_dict={self._r_tforms_plc: sel_lig_tforms,
                                  self._r_cameraviews_plc: sel_cameraviews})
         # start threads to fill the regenerator queue
-        self._r_enqueue_thr = self._r_queue_runner.create_threads(self.sess, self._logf, coord=self.coord, start=True, daemon=True)
+        self._r_enqueue_thr = self._r_queue_runner.create_threads(self.sess, self.logger, coord=self.coord, start=True, daemon=True)
         self.sess.run(self.pass_batch_to_the_training_queue)
         self.coord.request_stop()
         # accurately terminate all threads without closing the queue (using custom QueueRunner class)
         self.sess.run(self._r_tforms_and_cameraviews_queue_allowstop)
         self.coord.join()
         self.coord.clear_stop()
-        av4_utils.dequeue_all(self.sess, self._r_tform, self._logf, "_r_tforms_and_cameraviews_queue")
-        av4_utils.dequeue_all(self.sess,self._image_queue_deq, self._logf, "image_queue")
+        av4_utils.dequeue_all(self.sess, self._r_tform, self.logger, "_r_tforms_and_cameraviews_queue")
+        av4_utils.dequeue_all(self.sess,self._image_queue_deq, self.logger, "image_queue")
         return None
 
     class EvaluationsContainer:
@@ -236,8 +238,8 @@ class SamplingAgent:
         """
         # TODO: add a possibility to generate new matrices based on performed evaluations.
         # (aka genetic search in AutoDock)
-        def __init__(self,_logf):
-            self._logf = _logf
+        def __init__(self, logger):
+            self.logger = logger
             self.preds = np.array([])
             self.costs = np.array([])
             self.lig_pose_transforms = np.array([]).reshape([0, 4, 4])
@@ -276,25 +278,24 @@ class SamplingAgent:
             sel_gen_poses_idx = gen_poses_idx[-generated_poses:]
 
             # print a lot of statistics for debugging/monitoring purposes
-            self._logf("statistics sampled conformations:")
+            self.logger.info("statistics sampled conformations:")
             var_list = {'lig_RMSDs':self.lig_RMSDs,'preds':self.preds,'costs':self.costs}
-            self._logf(av4_utils.var_stats(var_list))
-            self._logf("statistics for selected (hardest) initial conformations")
+            self.logger.info(av4_utils.var_stats(var_list))
+            self.logger.info("statistics for initial conformations")
+            var_list = {'lig_RMSDs':self.lig_RMSDs[init_poses_idx], 'preds':self.preds[init_poses_idx],
+                        'costs':self.costs[init_poses_idx]}
+            self.logger.info(av4_utils.var_stats(var_list))
+            self.logger.info("statistics for generated conformations")
+            var_list = {'lig_RMSDs':self.lig_RMSDs[gen_poses_idx], 'preds':self.preds[gen_poses_idx],
+                        'costs':self.costs[gen_poses_idx]}
+            self.logger.info(av4_utils.var_stats(var_list))
+            self.logger.info("statistics for selected (hardest) initial conformations")
             var_list = {'lig_RMSDs':self.lig_RMSDs[sel_init_poses_idx], 'preds':self.preds[sel_init_poses_idx],
                         'costs':self.costs[sel_init_poses_idx]}
-            self._logf(av4_utils.var_stats(var_list))
-            self._logf("statistics for selected (hardest) generated conformations")
+            self.logger.info(av4_utils.var_stats(var_list))
+            self.logger.info("statistics for selected (hardest) generated conformations")
             var_list = {'lig_RMSDs':self.lig_RMSDs[sel_gen_poses_idx], 'preds':self.preds[sel_gen_poses_idx],
                         'costs':self.costs[sel_gen_poses_idx]}
-            self._logf(av4_utils.var_stats(var_list))
-            sel_idx = np.hstack([sel_init_poses_idx,sel_gen_poses_idx])
-            return self.lig_pose_transforms[sel_idx],self.cameraviews[sel_idx]
-
-
-    def _logf(self, message, stdout=False):
-        log_file = (FLAGS.summaries_dir + "/" + FLAGS.run_name + "_logs/" + self.agent_name + ".log")
-        with open(log_file, 'a') as fout:
-            message = str(message)
-            fout.write(message)
-        if stdout:
-            print message,
+            self.logger.info(av4_utils.var_stats(var_list))
+            sel_idx = np.hstack([sel_init_poses_idx, sel_gen_poses_idx])
+            return self.lig_pose_transforms[sel_idx], self.cameraviews[sel_idx]

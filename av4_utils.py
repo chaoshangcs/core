@@ -611,7 +611,7 @@ class QueueRunner(object):
       logging.vlog(1, "Ignored exception: %s", str(e))
   # pylint: enable=broad-except
 
-  def create_threads(self, sess, _logf, coord=None, daemon=False, start=False):
+  def create_threads(self, sess, logger, coord=None, daemon=False, start=False):
     """Create threads to run the enqueue ops for the given session.
 
     This method requires a session in which the graph was launched.  It creates
@@ -664,7 +664,7 @@ class QueueRunner(object):
         log_message = ""
         t.start()
         log_message += str("[tr:" + str(started_threads) + "]")
-        _logf(log_message)
+        logger.debug(log_message)
         started_threads+=1
 
 #    time.sleep(0.25)
@@ -709,11 +709,11 @@ class QueueRunner(object):
 
 
 
-def dequeue_all(sess,dequeue_op, _logf, op_name=None):
-    _logf(str(op_name) + ":starting to deque all examples")
+def dequeue_all(sess, dequeue_op, logger, op_name=None):
+    logger.debug(str(op_name) + ":starting to deque all examples")
     try:
         while True:
             sess.run(dequeue_op, options=tf.RunOptions(timeout_in_ms=500))
-            _logf(".")
+            logger.debug(".")
     except tf.errors.DeadlineExceededError:
-        _logf(str(op_name) + ":queue empty")
+        logger.debug(str(op_name) + ":queue empty")

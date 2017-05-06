@@ -1,5 +1,5 @@
 import tensorflow as tf
-
+import logging
 
 class FLAGS:
     # TODO: reformat every part of config to make it suitable to training & testing % evaluations
@@ -37,10 +37,11 @@ class FLAGS:
     # optional saved session: network from which to load variable states
     saved_session = None
     # it's a good tradition to name the run with a number (easy to group)
-    run_name = '2_test'
+    run_name = '1_run'
 
     # TECHNICAL (DO NOT MODIFY) PARAMETERS
     # main session for multiagent training
     main_session = tf.Session()
     # number of examples in the database
     ex_in_database = None
+#    logging.basicConfig(filename=summaries_dir+"/"+run_name, level=logging.DEBUG)
