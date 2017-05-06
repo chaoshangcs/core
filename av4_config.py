@@ -31,7 +31,7 @@ class FLAGS:
 
     # FILE LOCATION PARAMETERS
     # path with the training set
-    database_path = "../datasets/unlabeled_av4"
+    database_path = "../datasets/labeled_av4"
     # directory where to write variable/graph summaries
     summaries_dir = './summaries'
     # optional saved session: network from which to load variable states
@@ -44,4 +44,3 @@ class FLAGS:
     main_session = tf.Session()
     # number of examples in the database
     ex_in_database = None
-#    logging.basicConfig(filename=summaries_dir+"/"+run_name, level=logging.DEBUG)
