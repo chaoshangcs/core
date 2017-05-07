@@ -137,25 +137,26 @@ def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affi
 
 class table(pd.DataFrame):
     def apply_rest(self, key, val):
+        new = self
         if isinstance(val, numbers.Number) or isinstance(val, six.string_types):
-            self = self[self[key] == val]
+            new = new[new[key] == val]
         elif isinstance(val, list):
             if len(val) == 2:
                 minimum, maximum = val
                 if minimum is not None:
-                    self = self[self[key] >= minimum]
+                    new = new[new[key] >= minimum]
                 if maximum is not None:
-                    self = self[self[key] <= maximum]
+                    new = new[new[key] <= maximum]
             else:
                 raise Exception("require restriction size 2, get %d" % len(val))
         elif isinstance(val, tuple):
             if len(val) == 2:
                 minimum, maximum = val
                 if minimum is not None:
-                    self = self[self[key] > minimum]
+                    new = new[new[key] > minimum]
                 if maximum is not None:
                     
-                    self = self[self[key] < maximum]
+                    new = new[new[key] < maximum]
             else:
                 raise Exception("require restriction size 2, get %d" % len(val))
         elif val is None:
@@ -163,31 +164,39 @@ class table(pd.DataFrame):
         else:
             raise Exception("Restrictions type {} doesn't support.".format(type(val).__name__))
         
-        return table(self)
+        return self.wrap(new)
+
+    @classmethod
+    def wrap(cls, dataframe):
+        return cls(dataframe)
 
     def __and__(self, other):
-        self = self.merge(other).drop_duplicates().dropna()
-        return table(self)
+        new = self
+        new = new.merge(other).drop_duplicates().dropna()
+        return self.wrap(new)
 
     def __or__(self, other):
-        self = self.merge(other, how='outer').drop_duplicates().dropna()
-    
+        new = self
+        new = new.merge(other, how='outer').drop_duplicates().dropna()
+        return self.wrap(new)
+
     def __sub__(self, other):
         
-        s = set(map(tuple, list(slef.values)))
+        new = self
+        s = set(map(tuple, list(new.values)))
         o = set(map(tuple, list(other.values)))
 
         diff = s - o
         columns = self.columns
 
         if len(diff):
-            self = table(list(diff), columns=columns)
+            new = self.wrap(table(list(diff), columns=columns))
         else:
-            self = table()
+            new = self.wrap(pd.DataFrame())
 
-        return self
+        return new
 
-class retrive_data:
+class retrive_data(object):
 
     def __init__(self):
         
@@ -219,7 +228,7 @@ class retrive_data:
         self.affinity_key = None
 
     def __and__(self, other):
-        
+
         assert self.receptor_folder == other.receptor_folder
         assert self.ligand_folder == other.ligand_folder 
         assert self.docked_folder == other.docked_folder \
@@ -228,45 +237,50 @@ class retrive_data:
 
         assert self.affinity_key == other.affinity_key
 
-        if self.ligand is None:
-            self.ligand = other.ligand 
-        elif other.ligand is not None:
-            self.ligand = self.ligand and other.ligand 
-        
-        if self.position is None:
-            self.position = other.position
-        elif other.position is not None:
-            self.position = self.position and other.position 
-        
-        if self.docked_folder is None:
-            self.docked_folder = other.docked_folder
+        new = self.same()
 
-        return self 
+        if new.ligand is None:
+            new.ligand = other.ligand 
+        elif other.ligand is not None:
+            new.ligand = new.ligand & other.ligand 
+        
+        if new.position is None:
+            new.position = other.position
+        elif other.position is not None:
+            new.position = new.position & other.position 
+        
+        if new.docked_folder is None:
+            new.docked_folder = other.docked_folder
+
+        return new 
 
     def __or__(self, other):
         
         assert self.receptor_folder == other.receptor_folder
         assert self.ligand_folder == other.ligand_folder
-                assert self.docked_folder == other.docked_folder \
+        assert self.docked_folder == other.docked_folder \
                 or self.docked_folder == None \
                 or other.docked_folder == None
 
         assert self.affinity_key == other.affinity_key
 
-        if self.ligand is None:
-            self.ligand = other.ligand 
-        elif other.ligand is not None:
-            self.ligand = self.ligand or other.ligand 
-        
-        if self.position is None:
-            self.position = other.position
-        elif other.position is not None:
-            self.position = self.position or other.position 
-        
-        if self.docked_folder is None:
-            self.docked_folder = other.docked_folder
+        new = self.same()
 
-        return self         
+        if new.ligand is None:
+            new.ligand = other.ligand 
+        elif other.ligand is not None:
+            new.ligand = new.ligand | other.ligand 
+
+        if new.position is None:
+            new.position = other.position
+        elif other.position is not None:
+            new.position = new.position | other.position 
+        
+        if new.docked_folder is None:
+            new.docked_folder = other.docked_folder
+
+        return new
+      
 
     def same(self):
         
@@ -547,7 +561,7 @@ def example2():
     rb = retrive_data().recpeotr(2).crystal(3).norm_affinity(4,None)
     rc = rb.same().overlap(5,[None,0.5])
     rd = rb.same().overlap(5,(0.5,None)).rmsd(6,[None,2])
-    re = rc or rd 
+    re = rc | rd 
     table = re.export_table()
 
 

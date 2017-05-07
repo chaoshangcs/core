@@ -2,7 +2,7 @@ import numpy as np
 import time
 import re,math
 import csv
-
+from collections import Counter
 def read_binding_moad(binding_moad_index):
     class PDB_moad:
         num_records = 0
@@ -213,9 +213,90 @@ def read_PDB_bind(pdb_bind_index = "/home/maksym/PyCharmProjects/datasets/pdbbin
     return PDB_bind
 
 
+def read_binding_db(binding_db_index):
+    class binding_db:
+        num_records = 0
+        num_exceptions = 0
+        cant_split_lines = []
+        cant_split_affinity_and_moilarity = []
+        pdb_names = []
+        ligand_names = []
+        binding_affinities = []
+        log_affinities = []
+        normalized_affinities = []
+        exceptions = []
+        states = []
+        comments = []
+
+    with open(binding_db_index) as fin:
+        reader = csv.reader(fin, delimiter='\t')
+        head = reader.next()
+        # select the important columns
+        #     Ki(nM) 
+        #     IC50(nM) 
+        #     Kd(nM)
+        #     pH
+        #     Temp (C)
+        #     Ligand HET ID
+        #     PDB ID(s) for Ligand-Target Complex
+        collections = map(lambda row:[row[8],row[9],row[10],row[14],
+                                    row[15],row[26],row[27]],reader)
+        
+        # remove record if the ligand or receptor ID missing
+        valid = filter(lambda row: 
+                            not(row[-1]=='' or row[-2]==''), collections)
+        
+        # remove ligand-receptor record if it appears more than once
+        pairs = map(lambda row:(row[-2],row[-1]),valid)
+        counter = Counter(pairs)
+        unique_pair = [k for k,v in counter.items() if v==1]
+        unique_entry = filter(lambda row: 
+                                (row[-2],row[-1]) in unique_pair, valid)
+        
+        # Every record only have one PDB ID
+        single_pairs = []
+        for entry in unique_entry:
+            for pdb in entry[-1].split(','):
+                single_pairs.append(entry[:-1]+[pdb])
+    
+        # remove records which have more than one kind of measure value
+        better = []
+        for entry in single_pairs:
+            # only 25 entry have more than one kind of measure
+            c = 0
+            pos = 0
+            for i in range(3):
+                if not entry[i] == '':
+                    c +=1
+                    pos = i
+            if c==1:
+                better.append([entry[pos]]+entry[3:])
+        
+        # remove the record if its affinity value not precise
+        temp = filter(lambda x:x[0][0] not in ['<', '>'], better)
+        records = map(lambda x:[float(x[0])]+x[1:], temp)
+
+        for affinity, ph, temp, lig, rec in records:
+            binding_db.pdb_names.append(rec)
+            binding_db.ligand_names.append(lig)
+            binding_db.log_affinities.append(np.log(float(affinity)) - np.log(10.0 ** 9))
+            binding_db.states.append(1)
+            binding_db.comments.append('success')
+
+            binding_db.num_records += 1
+
+        max_log_affinity = np.log(10.**0)
+        min_log_affinity = np.log(10.**-18)
+        binding_db.normalized_affinities = (binding_db.log_affinities - min_log_affinity) / (max_log_affinity - min_log_affinity)
+        print "parsing finished. num records:",binding_db.num_records,"num exceptions:",binding_db.num_exceptions
+        return binding_db
+
+            
+
 parse_bind_func = {
     'pdbbind':read_PDB_bind,
-    'bindmoad':read_binding_moad
+    'bindmoad':read_binding_moad,
+    'binidngdb':read_binding_db
 }
 
 
