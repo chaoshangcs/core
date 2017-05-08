@@ -136,14 +136,14 @@ def deepVS_net(ligand_atoms, ligand_coords, keep_prob):
 	z_embed = embed_layer('embedding', z_processed)
 	#convolutional layer - padding = 'VALID' prevents 0 padding
 	z_conv = conv_layer('face_conv', input_tensor=z_embed, filter_size=[k_c, d_atm+d_dist, 1, 1, cf], padding='VALID')
-	#max pool along the columns (corresponding to each convolutional filter)
-	z_pool = tf.reduce_max(z_conv, axis=[3], keep_dims=True)
+	#average pool along the columns (corresponding to each convolutional filter)
+	z_pool = tf.reduce_mean(z_conv, axis=[3], keep_dims=True)
 	#pool gives us batch*1*1*1*cf tensor; flatten it to get a tensor of length cf
-	#NOTE: THIS IS ACTUALLY 2D in batch!
 	z_flattened = tf.reshape(z_pool, [-1, cf])
-	#fully connected layer
-	z_fc1 = fc_layer(layer_name='fc1', input_tensor=z_flattened, output_dim=h)
 	#dropout
+	z_drop = tf.nn.dropout(z_flattened, keep_prob, name='dropout')
+	#fully connected layer
+	z_fc1 = fc_layer(layer_name='fc1', input_tensor=z_drop, output_dim=h)
 	#output layer
 	z_output = fc_layer(layer_name='out_neuron', input_tensor=z_fc1, output_dim=2)
 	#get rid of the batch dimension 

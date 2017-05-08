@@ -60,11 +60,11 @@ def train():
         epo,c_entropy_mean,_ = sess.run([current_epoch,cross_entropy_mean,train_step_run], feed_dict={keep_prob: 0.5})
         mem_of_entropy.append(c_entropy_mean)
 
-        if (batch_num % 100 == 99):
+        if (batch_num % 100 == 0):
             print "epoch:",epo,"global step:", batch_num, "\tentropy:", c_entropy_mean, "\entropy average:", np.average(mem_of_entropy[-1000:]),
             print "\texamples per second:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
 
-        if (batch_num % 10000 == 9999):
+        if (batch_num % 10000 == 0):
             # once in a while save the network state and write variable summaries to disk
             summaries = sess.run(merged_summaries, feed_dict={keep_prob:1})
             mem_of_entropy = mem_of_entropy[-1000:]
