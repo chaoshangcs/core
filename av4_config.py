@@ -1,9 +1,7 @@
 import tensorflow as tf
-import logging
 
 class FLAGS:
     # TODO: reformat every part of config to make it suitable to training & testing % evaluations
-
     """important model parameters"""
 
 
@@ -13,20 +11,26 @@ class FLAGS:
     # size of the side of the box (box is centered on ligand's center of mass)
     side_pixels = 20
     # epochs are counted by positive examples
-    num_epochs = 50000
+    num_training_epochs = 500
     # number of background threads per agent on GPU
     num_threads = 8
     # batch size for the sampling agent
-    batch_size = 100
+    batch_size = 128
+    # capacity of the training queue
+    train_q_capacity = 1000000
+    # number of examples to keep in the train queue for good shuffling
+    # (consider that typical batch size is 128)
+    train_q_min_after_dequeue = 100000
+
 
     # SAMPLING PARAMETERS
     # new positions; exhaustive sampling
-    shift_ranges = [9,9,9]
-    shift_deltas = [3,3,3]
-    initial_pose_evals = 50
+    shift_ranges = [4,4,4]
+    shift_deltas = [2.1,2.1,2.1]
+    initial_pose_evals = 64
     # parameters for a single output batch
-    train_batch_init_poses = 50
-    train_batch_gen_poses = 50
+    train_batch_init_poses = 64
+    train_batch_gen_poses = 64
 
 
     # FILE LOCATION PARAMETERS
@@ -38,6 +42,7 @@ class FLAGS:
     saved_session = None
     # it's a good tradition to name the run with a number (easy to group)
     run_name = '1_run'
+
 
     # TECHNICAL (DO NOT MODIFY) PARAMETERS
     # main session for multiagent training

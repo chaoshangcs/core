@@ -23,15 +23,15 @@ class SamplingAgentonGPU:
         self.sampling_coord = sampling_coord
         self.sess = sess
         self.filename_queue = filename_queue
-        self.logger = logging.getLogger(agent_name)
+        self._logger = logging.getLogger(agent_name)
         log_file = (FLAGS.summaries_dir + "/" + FLAGS.run_name + "_logs/" + agent_name + ".log")
-        self.logger.addHandler(logging.FileHandler(log_file, mode='a'))
-        self.ag = av4_conformation_sampler.SamplingAgent(agent_name,gpu_name,training_queue,self.logger)
+        self._logger.addHandler(logging.FileHandler(log_file, mode='a'))
+        self.ag = av4_conformation_sampler.SamplingAgent(agent_name, gpu_name, training_queue, self._logger)
 
         self.lig_file, _, _, self.lig_elem, self.lig_coord, self.rec_elem, self.rec_coord = \
             av4_input.read_receptor_and_ligand(filename_queue=self.filename_queue, epoch_counter=tf.constant(0))  # FIXME: change epoch counter
 
-        self.logger.info("SamplingAgentonGPU:" + agent_name + "successfully initialized on device:" + gpu_name)
+        self._logger.info("SamplingAgentonGPU:" + agent_name + "successfully initialized on device:" + gpu_name)
 
     def _count_example(self):
         if (self.sampling_coord.run_samples is not None) and (self.sampling_coord.run_samples > 0):
@@ -54,7 +54,7 @@ class SamplingAgentonGPU:
                 my_lig_file, my_lig_elem, my_lig_coord, my_rec_elem, my_rec_coord = self.sess.run(
                     [self.lig_file, self.lig_elem, self.lig_coord, self.rec_elem, self.rec_coord])
                 self.ag.grid_evaluate_positions(my_lig_elem,my_lig_coord,my_rec_elem,my_rec_coord)
-                self.logger.info("evaluated positions for:" + my_lig_file)
+                self._logger.info("evaluated positions for:" + my_lig_file)
                 self._count_example()
 
             except Exception as ex:
@@ -74,16 +74,17 @@ class GradientDescendMachine:
     Controls sampling, infinite, or timely. Potentially, with many GPUs.
     Dependencies: FLAGS.examples_in_database should be already calculated
     """
-    def __init__(self,side_pixels=FLAGS.side_pixels, batch_size=FLAGS.batch_size):
+    def __init__(self, side_pixels=FLAGS.side_pixels, batch_size=FLAGS.batch_size,
+                 train_q_capacity=FLAGS.train_q_capacity, train_q_min_after_dequeue = FLAGS.train_q_min_after_dequeue):
 
         # try to capture all of the events that happen in many background threads with tf.logging.DEBUG
         tf.logging.set_verbosity(tf.logging.DEBUG)
         logging.basicConfig(level=logging.INFO)
 
         # create a logger object only for the main threadf of the gradient descend machine
-        self.logger = logging.getLogger("machine")
+        self._logger = logging.getLogger("machine")
         log_file = (FLAGS.summaries_dir + "/" + FLAGS.run_name + "_logs/machine.log")
-        self.logger.addHandler(logging.FileHandler(log_file, mode='a'))
+        self._logger.addHandler(logging.FileHandler(log_file, mode='a'))
 
         # create session to compute evaluation
         self.sess = FLAGS.main_session
@@ -92,18 +93,18 @@ class GradientDescendMachine:
         self.global_step = 0
 
         # create a filename queue first
-        filename_queue,self.ex_in_database = av4_input.index_the_database_into_queue(FLAGS.database_path, shuffle=True)
+        filename_q, self.ex_in_database = av4_input.index_the_database_into_q(FLAGS.database_path, shuffle=True)
 
         # create a very large queue of images for central parameter server
-        # TODO: make capacity adjustable
-        self.training_queue = tf.RandomShuffleQueue(capacity=1000000, min_after_dequeue=10,
-                                                    dtypes=[tf.float32,tf.float32],
-                                                    shapes=[[side_pixels,side_pixels,side_pixels],[]])
-        self.training_queue_size = self.training_queue.size()
-        tf.summary.scalar("training_queue_size",self.training_queue_size)
+        self.training_q = tf.RandomShuffleQueue(capacity=train_q_capacity,
+                                                min_after_dequeue=train_q_min_after_dequeue,
+                                                dtypes=[tf.float32,tf.float32],
+                                                shapes=[[side_pixels,side_pixels,side_pixels],[]])
+        self.training_q_size = self.training_q.size()
+        tf.summary.scalar("training_queue_size",self.training_q_size)
 
         # create a way to train a network
-        image_batch,lig_RMSD_batch = self.training_queue.dequeue_many(batch_size)
+        image_batch,lig_RMSD_batch = self.training_q.dequeue_many(batch_size)
         self.keep_prob = tf.placeholder(tf.float32)
 
         with tf.name_scope("network"):
@@ -120,14 +121,14 @@ class GradientDescendMachine:
         self.sampling_coord = tf.train.Coordinator()
         self.sampling_coord.lock = threading.Lock()
 
-        self.ag0 = SamplingAgentonGPU("AG0", "/gpu:0", filename_queue, self.sampling_coord, self.training_queue, self.sess)
-#        self.ag1 = SamplingAgentonGPU("AG1", "/gpu:1", filename_queue, self.sampling_coord, self.training_queue, self.sess)
-#        self.ag2 = SamplingAgentonGPU("AG2", "/gpu:2", filename_queue, self.sampling_coord, self.training_queue, self.sess)
-#        self.ag3 = SamplingAgentonGPU("AG3", "/gpu:3", filename_queue, self.sampling_coord, self.training_queue, self.sess)
-#        self.ag4 = SamplingAgentonGPU("AG4", "/gpu:4", filename_queue, self.sampling_coord, self.training_queue, self.sess)
-#        self.ag5 = SamplingAgentonGPU("AG5", "/gpu:5", filename_queue, self.sampling_coord, self.training_queue, self.sess)
-#        self.ag6 = SamplingAgentonGPU("AG6", "/gpu:6", filename_queue, self.sampling_coord, self.training_queue, self.sess)
-#        self.ag7 = SamplingAgentonGPU("AG7", "/gpu:7", filename_queue, self.sampling_coord, self.training_queue, self.sess)
+        self.ag0 = SamplingAgentonGPU("AG0", "/gpu:0", filename_q, self.sampling_coord, self.training_q, self.sess)
+#        self.ag1 = SamplingAgentonGPU("AG1", "/gpu:1", filename_q, self.sampling_coord, self.training_q, self.sess)
+#        self.ag2 = SamplingAgentonGPU("AG2", "/gpu:2", filename_q, self.sampling_coord, self.training_q, self.sess)
+#        self.ag3 = SamplingAgentonGPU("AG3", "/gpu:3", filename_q, self.sampling_coord, self.training_q, self.sess)
+#        self.ag4 = SamplingAgentonGPU("AG4", "/gpu:4", filename_q, self.sampling_coord, self.training_q, self.sess)
+#        self.ag5 = SamplingAgentonGPU("AG5", "/gpu:5", filename_q, self.sampling_coord, self.training_q, self.sess)
+#        self.ag6 = SamplingAgentonGPU("AG6", "/gpu:6", filename_q, self.sampling_coord, self.training_q, self.sess)
+#        self.ag7 = SamplingAgentonGPU("AG7", "/gpu:7", filename_q, self.sampling_coord, self.training_q, self.sess)
 
 
         # merge all summaries and create a file writer object
@@ -144,9 +145,9 @@ class GradientDescendMachine:
             self.sess.run(tf.global_variables_initializer())
         else:
             self.sess.run(tf.global_variables_initializer())
-            self.logger.info("Restoring variables from sleep. This may take a while...")
+            self._logger.info("Restoring variables from sleep. This may take a while...")
             self.saver.restore(self.sess,FLAGS.saved_session)
-            self.logger.info("unitialized vars:", self.sess.run(tf.report_uninitialized_variables()))
+            self._logger.info("unitialized vars:", self.sess.run(tf.report_uninitialized_variables()))
         # do not allow to add any nodes to the graph after this point
         tf.get_default_graph().finalize()
 
@@ -184,15 +185,15 @@ class GradientDescendMachine:
             if (self.global_step % 100 == 99):
                 self.saver.save(self.sess, FLAGS.summaries_dir + '/' + str(FLAGS.run_name) + "_netstate/saved_state",
                                 global_step=self.global_step)
-                _, my_summaries, my_cost, my_training_queue_size = self.sess.run([self.train_step_run,
-                                                                                  self.merged_summaries,
-                                                                                  self.cost,
-                                                                                  self.training_queue_size],
-                                                                                 feed_dict={self.keep_prob:0.5})
+                _, my_summaries, my_cost, my_training_q_size = self.sess.run([self.train_step_run,
+                                                                              self.merged_summaries,
+                                                                              self.cost,
+                                                                              self.training_q_size],
+                                                                             feed_dict={self.keep_prob:0.5})
                 self.summary_writer.add_summary(my_summaries, self.global_step)
             else:
                 _, my_cost = self.sess.run([self.train_step_run, self.cost], feed_dict={self.keep_prob: 0.5})
-            self.logger.info("global step:" + str(self.global_step) + "softmax RMSD cost:" + str(my_cost))
+            self._logger.info("global step:" + str(self.global_step) + "softmax RMSD cost:" + str(my_cost))
             # increment the batch counter
             self.global_step +=1
 
@@ -216,14 +217,7 @@ class GradientDescendMachine:
         # be not afraid of physics -- it brings good first-layer convolutions
 
 
-
-a = GradientDescendMachine()
-
-
-
-
-a.do_sampling(sample_epochs=None)
-a.do_training(train_epochs=500)
-
-
-print "All Done"
+# TODO. Under learning schedule under construction
+machine = GradientDescendMachine()
+machine.do_sampling(sample_epochs=None)
+machine.do_training(train_epochs=FLAGS.num_training_epochs)

@@ -11,7 +11,7 @@ from av4_utils import generate_deep_affine_transform,affine_transform
 
 
 
-def index_the_database_into_queue(database_path,shuffle):
+def index_the_database_into_q(database_path,shuffle):
     """ Indexes av4 database and returns two lists of filesystem path: ligand files, and protein files.
     Ligands are assumed to end with _ligand.av4, proteins should be in the same folders with ligands.
     Each protein should have its own folder named similarly to the protein name (in the PDB).
