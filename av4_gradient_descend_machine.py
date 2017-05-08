@@ -74,8 +74,9 @@ class GradientDescendMachine:
     Controls sampling, infinite, or timely. Potentially, with many GPUs.
     Dependencies: FLAGS.examples_in_database should be already calculated
     """
-    def __init__(self, side_pixels=FLAGS.side_pixels, batch_size=FLAGS.batch_size,
-                 train_q_capacity=FLAGS.train_q_capacity, train_q_min_after_dequeue = FLAGS.train_q_min_after_dequeue):
+    def __init__(self, batch_size=FLAGS.train_batch_init_poses + FLAGS.train_batch_gen_poses,
+                 side_pixels=FLAGS.side_pixels, train_q_capacity=FLAGS.train_q_capacity,
+                 train_q_min_after_dequeue = FLAGS.train_q_min_after_dequeue):
 
         # try to capture all of the events that happen in many background threads with tf.logging.DEBUG
         tf.logging.set_verbosity(tf.logging.DEBUG)
@@ -101,10 +102,10 @@ class GradientDescendMachine:
                                                 dtypes=[tf.float32,tf.float32],
                                                 shapes=[[side_pixels,side_pixels,side_pixels],[]])
         self.training_q_size = self.training_q.size()
-        tf.summary.scalar("training_queue_size",self.training_q_size)
+        tf.summary.scalar("training_queue_size", self.training_q_size)
 
         # create a way to train a network
-        image_batch,lig_RMSD_batch = self.training_q.dequeue_many(batch_size)
+        image_batch, lig_RMSD_batch = self.training_q.dequeue_many(batch_size)
         self.keep_prob = tf.placeholder(tf.float32)
 
         with tf.name_scope("network"):
