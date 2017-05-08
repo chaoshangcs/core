@@ -19,7 +19,7 @@ l = 0.075
 #number of neighbor atoms from ligand
 k_c = 6
 #number of neighbor atoms from protein
-k_p = 0
+k_p = 2
 #number of atom types
 ATOM_TYPES = 7
 #number of distance bins
@@ -47,13 +47,13 @@ def variable_summaries(var, name):
         tf.summary.scalar('stddev/' + name, stddev)
         tf.summary.scalar('max/' + name, tf.reduce_max(var))
         tf.summary.scalar('min/' + name, tf.reduce_min(var))
-		tf.summary.histogram(name, var)
+	tf.summary.histogram(name, var)
 
-def preprocess_layer(layer_name, atoms, coords):
+def preprocess_layer(layer_name, atoms, coords, receptor_atoms, receptor_coords):
 	#get a matrix of distances between atoms (tensor with shape [m, m])
 	coords_copy = tf.transpose(tf.expand_dims(coords, 0), perm=[1,0,2])
 	distances = tf.reduce_sum(tf.square(coords - coords_copy), reduction_indices=[2]) ** 0.5
-	
+
 	#get the closest neighbors using tf.nn.top_k, and the corresponding atoms
 	neg_distances = tf.multiply(distances, tf.constant(-1.0))
 	neighbor_neg_distances, neighbor_atom_indices = tf.nn.top_k(neg_distances, k_c)
@@ -61,6 +61,25 @@ def preprocess_layer(layer_name, atoms, coords):
 	neighbor_distances = tf.multiply(neighbor_neg_distances, tf.constant(-1.0/DIST_INTERVAL))
 	neighbor_distances = tf.add(neighbor_distances, tf.constant(1.0))
 	neighbor_atoms = tf.gather(atoms, neighbor_atom_indices)
+
+	#NOW REPEAT THE PROCESS FOR LIGAND ATOMS AND RECPTOR ATOMS-------------------
+
+	#get a matrix of distances between ligand/receptor atoms (tensor shape [m, n])
+	r_coords_copy = tf.transpose(tf.expand_dims(receptor_coords, 0), perm=[1,0,2])
+	r_distances = tf.reduce_sum(tf.square(coords - r_coords_copy), reduction_indices=[2]) ** 0.5
+	r_distances = tf.transpose(r_distances, perm=[1,0])
+
+	#get the closest receptor atoms using tf.nn.top_k, and the corresponding atoms
+	r_neg_distances = tf.multiply(r_distances, tf.constant(-1.0))
+	r_neighbor_neg_distances, r_neighbor_atom_indices = tf.nn.top_k(r_neg_distances, k_p)
+	#binning the distances and associating atom indices with actual atom types
+	r_neighbor_distances = tf.multiply(r_neighbor_neg_distances, tf.constant(-1.0/DIST_INTERVAL))
+	r_neighbor_distances = tf.add(r_neighbor_distances, tf.constant(1.0))
+	r_neighbor_atoms = tf.gather(receptor_atoms, r_neighbor_atom_indices)
+
+	#now combine the atom and receptor atoms/distances
+	neighbor_atoms = tf.concat([neighbor_atoms, r_neighbor_atoms], axis=1)
+	neighbor_distances = tf.concat([neighbor_distances, r_neighbor_distances], axis=1)
 	#convert to int, since we'll need that for tf.nn.embedding_lookup
 	neighbor_distances = tf.to_int32(neighbor_distances)
 
@@ -70,13 +89,13 @@ def preprocess_layer(layer_name, atoms, coords):
 	z_transposed = tf.transpose(z, perm=[2, 1, 0])
 
 	print layer_name, "output dimensions:", z_transposed.get_shape()
-	return z_transposed
+	return z_transposed, r_distances
 
 def embed_layer(layer_name, input_tensor):
 	"""performs feature embedding on the input tensor, 
 	transforming numbers to 200D vectors.
-	Input: tensor of shape [k_c, 2, m]
-	Output: tensor of shape [k_c, d_dist + d_atm, m, 1]
+	Input: tensor of shape [k_c + k_p, 2, m]
+	Output: tensor of shape [k_c + k_p, d_dist + d_atm, m, 1]
 	"""
 	with tf.name_scope(layer_name):
 		with tf.name_scope('atom_weights'):
@@ -88,7 +107,7 @@ def embed_layer(layer_name, input_tensor):
 
 		h_embed = tf.nn.embedding_lookup([W_atom, W_dist], input_tensor, name='embed_layer')
 		h_embed = tf.transpose(h_embed, perm=[0, 1, 3, 2])
-		h_embed = tf.reshape(h_embed, [1, k_c, d_atm+d_dist, -1, 1])
+		h_embed = tf.reshape(h_embed, [1, k_c+k_p, d_atm+d_dist, -1, 1])
 		tf.summary.histogram(layer_name + '/embed_output', h_embed)
 
 	print layer_name, "output dimensions:", h_embed.get_shape()
@@ -128,14 +147,15 @@ def fc_layer(layer_name,input_tensor,output_dim):
 
 #-----------------------------------NETWORK----------------------------------------#
 
-def deepVS_net(ligand_atoms, ligand_coords, keep_prob):
-	"""ligand_atoms has dimensions [m], ligand_coords has dimensions [m, 3]"""
+def deepVS_net(ligand_atoms, ligand_coords, receptor_atoms, receptor_coords, keep_prob):
+	"""ligand_atoms has dimensions [m], ligand_coords has dimensions [m, 3]
+	   receptor_atoms has dimensions [n], receptor_coords has dimensions [n, 3]"""
 	#take ligand_atoms, ligand_coords, preprocess it into our z vector
-	z_processed = preprocess_layer('preprocess', ligand_atoms, ligand_coords)
+	z_processed, r_distances = preprocess_layer('preprocess', ligand_atoms, ligand_coords, receptor_atoms, receptor_coords)
 	#do the feature embedding to get a tensor with shape [k_c, d_dist+d_atm, m, 1]
 	z_embed = embed_layer('embedding', z_processed)
 	#convolutional layer - padding = 'VALID' prevents 0 padding
-	z_conv = conv_layer('face_conv', input_tensor=z_embed, filter_size=[k_c, d_atm+d_dist, 1, 1, cf], padding='VALID')
+	z_conv = conv_layer('face_conv', input_tensor=z_embed, filter_size=[k_c+k_p, d_atm+d_dist, 1, 1, cf], padding='VALID')
 	#average pool along the columns (corresponding to each convolutional filter)
 	z_pool = tf.reduce_mean(z_conv, axis=[3], keep_dims=True)
 	#pool gives us batch*1*1*1*cf tensor; flatten it to get a tensor of length cf
@@ -147,5 +167,5 @@ def deepVS_net(ligand_atoms, ligand_coords, keep_prob):
 	#output layer
 	z_output = fc_layer(layer_name='out_neuron', input_tensor=z_fc1, output_dim=2)
 	#get rid of the batch dimension 
-	z_labels = tf.reshape(z_output, [2])
+	z_labels = tf.reshape(z_output, [2], name='output')
 	return z_labels

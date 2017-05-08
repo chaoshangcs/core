@@ -23,7 +23,7 @@ def train():
     keep_prob = tf.placeholder(tf.float32)
 
     #run it through the network
-    single_example = deepVS_net(ligand_atoms, ligand_coords, keep_prob)
+    single_example = deepVS_net(ligand_atoms, ligand_coords, receptor_elements, receptor_coords, keep_prob)
     
     #calculate the cross entropy
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=single_example,labels=label)
