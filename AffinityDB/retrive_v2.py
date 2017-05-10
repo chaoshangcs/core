@@ -66,10 +66,10 @@ def save_with_format(filepath,labels,elements,multiframe_coords,d_format='tfr'):
     
     elif d_format == 'pkl':
         dump_cont = [number_of_examples,labels, elements, multiframe_coords]
-        cPickle.dump(dump_cont,open(pkl_dest,'w'))
+        cPickle.dump(dump_cont,open(filepath,'w'))
 
-    elif d_format == 'rtf':
-        writer = tf.python_io.TFRecordWriter(tfr_dest)
+    elif d_format == 'tfr':
+        writer = tf.python_io.TFRecordWriter(filepath)
 
         example = tf.train.Example(
             features=tf.train.Features(
@@ -85,6 +85,58 @@ def save_with_format(filepath,labels,elements,multiframe_coords,d_format='tfr'):
         writer.write(serialized)
 
 
+def save_tfr_one(save_path, rec_labels, rec_elements, rec_coords, lig_labels, lig_elements, lig_coords):
+    rec_labels = np.asarray(rec_labels, dtype=np.float32)
+    rec_elements = np.asarray(rec_elements, dtype=np.int32)
+    rec_coords = np.asarray(rec_coords, dtype=np.float32)
+
+    lig_labels = np.asarray(lig_labels, dtype=np.float32)
+    lig_elements = np.asarray(lig_elements, dtype=np.int32)
+    lig_coords = np.asarray(lig_coords, dtype=np.float32)
+
+    if not (int(len(rec_coords[:,0]) == int(len(rec_elements)))):
+        raise Exception('Receptor: Number of atom elements is not equal to the number of coordinates')
+
+    if rec_coords.ndim==2:
+        if not int(len(rec_labels))==1:
+            raise Exception ('Receptor: Number labels is not equal to the number of coordinate frames')
+            
+    else:
+        if not (int(len(rec_coords[0, 0, :]) == int(len(rec_labels)))):
+            raise Exception('Rcecpeor: Number labels is not equal to the number of coordinate frames')
+
+
+    if not (int(len(lig_coords[:,0]) == int(len(lig_elements)))):
+        raise Exception('Ligand: Number of atom elements is not equal to the number of coordinates')
+
+    if lig_coords.ndim==2:
+        if not int(len(lig_labels))==1:
+            raise Exception ('Ligand: Number labels is not equal to the number of coordinate frames')
+            
+    else:
+        if not (int(len(lig_coords[0, 0, :]) == int(len(lig_labels)))):
+            raise Exception('Ligand: Number labels is not equal to the number of coordinate frames')
+
+    number_of_examples = np.array([len(lig_labels)], dtype=np.int32)
+
+    writer = tf.python_io.TFRecordWriter(save_path)
+
+    example = tf.train.Example(
+        features=tf.train.Features(
+            feature={
+                'number_of_examples': _int_feature(number_of_examples),
+                'ligand_labels': _float_feature(lig_labels),
+                'ligand_elements': _int_feature(lig_elements),
+                'ligand_coords': _float_feature(lig_coords.reshape(-1)),
+                'receptor_labels':_float_feature(rec_labels),
+                'receptor_elements':_int_feature(rec_elements),
+                'receptor_coords':_float_feature(rec_coords.reshape(-1))
+                }
+            )
+        )
+    serialized = example.SerializeToString()
+    writer.write(serialized)
+
 
 def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affinity, d_format):
 
@@ -95,7 +147,6 @@ def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affi
 
     prody_receptor = prody.parsePDB(rec_path)
     prody_ligand = prody.parsePDB(lig_path)
-
     receptor_elem = prody_receptor.getElements()
     ligand_elem =prody_ligand.getElements()
 
@@ -124,6 +175,18 @@ def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affi
         
     except:
         return None, None
+
+    if d_format == 'tfr_one':
+        save_name = os.path.basename(rec_path).replace('_receptor.pdb','.tfr')
+        save_path = os.path.join(dest_dir, save_name)
+        save_tfr_one(save_path, 
+                     [0], 
+                     receptor_elements, 
+                     prody_receptor.getCoords(), 
+                     labels,
+                     ligand_elements, 
+                     ligand_coords)
+        return save_path, None
     
     rec_name = os.path.basename(rec_path).replace('.pdb','.%s' % d_format)
     lig_name = os.path.basename(lig_path).replace('.pdb','.%s' % d_format)
@@ -186,7 +249,7 @@ class table(pd.DataFrame):
         s = set(map(tuple, list(new.values)))
         o = set(map(tuple, list(other.values)))
 
-        diff = s - o
+        diff = s - ofilepathfilepath
         columns = self.columns
 
         if len(diff):
@@ -443,7 +506,7 @@ class retrive_data(object):
         #   'av4': affinity build-in binary format
         #   'tfr': tensorflow record format
         
-        if not d_format in ['pkl','av4','tfr']:
+        if not d_format in ['pkl','av4','tfr', 'tfr_one']:
             raise Exception("Unexpected format {}, available format: {}".\
                                 format(d_format, ['pkl','av4','tfr']))
         
@@ -552,9 +615,9 @@ def example1():
     ra.crystal(3) # splited ligand table sn
     ra.log_affinity(4, None) # affinity table idx , [minimum, maximum]
     
-    #ra.export_data_to('test_1','av4') # convert file into av4 format
+    ra.export_data_to('test_tfr_one','tfr') # convert file into av4 format
     
-    table = ra.export_table()
+    #table = ra.export_table()
 
 def example2():
 
@@ -567,3 +630,4 @@ def example2():
 
 if __name__ == '__main__':
     print 'retrive_v2'
+    example1()

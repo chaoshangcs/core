@@ -62,6 +62,7 @@ tables = {
                             ('chain','text'),
                             ('resnum','text'),
                             ('resname','text'),
+                            ('resid','text'),
                             ('heavy_atom','integer'),
                             ('max_size_on_axis', 'real'),
                             ('state','integer'),

@@ -78,6 +78,8 @@ def split_ligand(table_idx, param, input_data):
         for chain, resnum, resname in ligands:
             try:
                 lig = parsed_pdb.select('chain {} resnum {}'.format(chain, resnum))
+                resid = lig.getHierView().iterResidues().next().getResindex()
+                resid = str(resid)
                 heavy_lig = lig.select('not hydrogen')
                 heavy_atom = heavy_lig.numAtoms()
                 heavy_coord =heavy_lig.getCoords()
@@ -89,11 +91,11 @@ def split_ligand(table_idx, param, input_data):
                 prody.writePDB(os.path.join(output_lig_dir, lig_name), lig)
 
 
-                record = [receptor, chain, resnum, resname, heavy_atom, max_size_on_axis, 1, 'success']                                     # data = success_message
+                record = [receptor, chain, resnum, resname, resid,heavy_atom, max_size_on_axis, 1, 'success']                                     # data = success_message
                 records = [record]
                 db.insert(table_idx, records)
             except Exception as e:
-                record =  [receptor, chain, resnum, resname, 0, 0, 0, str(e)]                                                # data = failure_message
+                record =  [receptor, chain, resnum, resname, 0, 0, 0, 0, str(e)]                                                # data = failure_message
                 records = [record]
                 db.insert(table_idx, records)
 
