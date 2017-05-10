@@ -391,6 +391,21 @@ def binding_affinity(table_idx, param, input_data):
     except Exception as e:
         print (e)
 
+def exclusion(table_idx, param, input_data):
+
+    try:
+        exclusion_index = param['index']
+
+        with open(exclusion_index) as fin:
+            exclusion_receptor = [x.strip().split('/')[-1].upper() for x in fin.readlines()]
+        records = []
+        for ex_rec in exclusion_receptor:
+            records.append([ex_rec, 1, 'success'])
+        db.insert(table_idx, records)
+    except Exception as e:
+        print (e)
+
+
 DatabaseAction={
     'download':download,
     'split_ligand':split_ligand,

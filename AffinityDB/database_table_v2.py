@@ -167,7 +167,16 @@ tables = {
                             ('comment','text')
                         ]
                     ),
-                    ['receptor','resname']])
+                    ['receptor','resname']]),
+    'exclusion':table(*['exclusion',
+                    OrderedDict(
+                        [
+                            ('resname','text'),
+                            ('state','integer'),
+                            ('comment','text')
+                        ]
+                    )
+                    ['resname']])
     
 
 }

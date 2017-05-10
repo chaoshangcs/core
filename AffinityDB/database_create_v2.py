@@ -64,7 +64,7 @@ def run_multiprocess(target_list, func):
 
 
 def get_job_data(func_name, table_idx, table_param, progress=False):
-    
+
     if func_name == 'download':
         download_list = open(config.list_of_PDBs_to_download).readline().strip().split(', ')
         finished_list = db.get_all_success(table_idx)
@@ -166,6 +166,16 @@ def get_job_data(func_name, table_idx, table_param, progress=False):
 
         # binding affinity finished at the first time it launched
         # no rest entry left to continue
+        rest_list = [[]]
+
+    elif func_name == 'exclusion':
+        finished_list = db.get_all_success(table_idx)
+        failed_list = db.get_all_failed(table_idx)
+
+        total = len(set(finished_list) | set(failed_list))
+        finished = len(set(finished_list) - set(failed_list))
+        failed = len(set(failed_list))
+
         rest_list = [[]]
 
     else:
@@ -383,6 +393,21 @@ def db_create():
             'func':'binding_affinity',
             'bind_param': config.bind_pm[bind_param]
         }
+
+    elif FLAGS.action == 'exclusion':
+        if FLAGS.param is None:
+            raise Exception('param required')
+
+        ex_param = FLAGS.param
+        if not ex_param in config.exclusion_pm.keys():
+            raise Exception('No exclusion records file for key {} in config\n'.format(ex_param) \
+                            + 'Available choices are {}'.format(str(config.exclusion_pm.keys())))
+
+        table_param = {
+            'func':'exclusion',
+            'ex_param': config.exclusion_pm[ex_param]
+        }
+
 
     else:
         raise Exception("Doesn't support action {}".format(FLAGS.action))

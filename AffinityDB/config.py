@@ -177,3 +177,8 @@ bind_pm = {
 }
 
 
+exclusion_pm = {
+    'default':{
+        'index':os.path.join(sys.path[0],'bind_index','exclusion.txt')
+    }
+}
