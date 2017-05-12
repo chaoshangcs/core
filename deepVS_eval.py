@@ -9,6 +9,8 @@ from collections import defaultdict
 
 # To use: need to update the directories.
 # The training data stored in Brian's folder uses k_p as 0, so update deepVS_input as well
+# This file hasn't been tested yet (instance was down). However, the file in Brian's folder on the instance works
+# Update this file with the one in Brian's folder on the instance
 FLAGS.saved_session = './summaries/39_netstate/saved_state-37999'
 FLAGS.predictions_file_path = re.sub("netstate","logs",FLAGS.saved_session)
 FLAGS.database_path = '../datasets/unlabeled_av4'
@@ -323,15 +325,8 @@ def evaluate_on_train_set():
 
     epoch_counter = tf.div(batch_counter*FLAGS.batch_size,examples_in_database)
 
-    # create a custom shuffle queue
-    # ligand_files,current_epoch,label_batch,sparse_image_batch = image_and_label_queue(batch_size=FLAGS.batch_size, pixel_size=FLAGS.pixel_size,
-    #                                                                       side_pixels=FLAGS.side_pixels, num_threads=FLAGS.num_threads,
-    #                                                                       filename_queue=filename_queue, epoch_counter=epoch_counter,train=False)
-    #
-    # image_batch = tf.sparse_tensor_to_dense(sparse_image_batch,validate_indices=False)
-
     # Read data from files
-    ligand_file, current_epoch, label, ligand_atoms, ligand_coords, receptor_elements, receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter,train=train)
+    ligand_file, current_epoch, label, ligand_atoms, ligand_coords, receptor_elements, receptor_coords = read_receptor_and_ligand(filename_queue,epoch_counter=epoch_counter,train=False)
 
     # Single example
     keep_prob = tf.placeholder(tf.float32)
