@@ -8,7 +8,7 @@ from av4_main import FLAGS
 from collections import defaultdict
 
 # To use: need to update the directories.
-# The training data stored in Brian's folder uses k_p as 0, so update deepVS_input as well
+# The training data stored in Brian's folder uses k_p as 0, so update deepVS_net as well
 # This file hasn't been tested yet (instance was down). However, the file in Brian's folder on the instance works
 # Update this file with the one in Brian's folder on the instance
 FLAGS.saved_session = './summaries/39_netstate/saved_state-37999'
