@@ -199,25 +199,6 @@ class GradientDescendMachine:
             self.global_step +=1
 
 
-        # should be cleaning the queue from the trash -- I think no
-        #
-        # I will need memory in the future
-
-        # is there a rule for fastest convergence ??
-        # maybe, there is a rule Gradient/Second
-        # simplest rule is cost update step
-        # good networks will , probably, need a lot of sampling at the end if this thing ever converges
-
-        # most of the cost is sampling (almost all) at moment X
-        # let's go simplest and do distributed training
-        # on all GPUs at the same time
-
-        # ideally, it's infinite sampling per step of training
-        # for best results sampling is absolute; any not absolute sampling is an exchange of efficacy for the speed
-        # training is always a single step in the future
-        # be not afraid of physics -- it brings good first-layer convolutions
-
-
 # TODO. Under learning schedule under construction
 machine = GradientDescendMachine()
 machine.do_sampling(sample_epochs=None)
