@@ -385,7 +385,7 @@ def evaluate_on_train_set():
 
     # create an instance of a class to store predictions
     all_predictios = store_predictions()
-    all_predictions_av3 = store_predictions_av3()
+    #all_predictions_av3 = store_predictions_av3()
 
     # add_batch(self, ligand_file_path, batch_predictions, batch_labels)
 
@@ -404,7 +404,7 @@ def evaluate_on_train_set():
 
             all_predictios.add_batch(my_ligand_files, my_ligand_frames, my_predictions)
             # add_batch(self, ligand_file_path, batch_predictions, batch_labels)
-            all_predictions_av3.add_batch(my_ligand_files,my_ligand_frames,my_predictions,my_labels)
+            #all_predictions_av3.add_batch(my_ligand_files,my_ligand_frames,my_predictions,my_labels)
 
             print "my labels:",my_labels
 
@@ -412,7 +412,7 @@ def evaluate_on_train_set():
         print "exiting the loop"
 
     all_predictios.save()
-    all_predictions_av3.save_predictions(FLAGS.predictions_file_path)
+    #all_predictions_av3.save_predictions(FLAGS.predictions_file_path)
 
 evaluate_on_train_set()
 print "All Done"
