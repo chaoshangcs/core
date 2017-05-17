@@ -24,7 +24,22 @@ def _makedir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def download(table_idx, param, input_data):                                                                                    # todo (maksym) remove all datums
+def download(table_idx, param, input_data):
+    '''
+    Download pdb file from rcsb
+    
+    Args:
+        table_idx: id for download table 
+        param: dict
+            {
+                'output_folder':'...',
+                ...
+            }
+        input_data: str pdb id 
+
+    Returns:
+
+    '''
     try:                                                                                                                # folder = output_folder
         receptor = input_data                                                                                                # datum = pdb_id
         output_folder = param['output_folder']                                                                                        # papram = params
