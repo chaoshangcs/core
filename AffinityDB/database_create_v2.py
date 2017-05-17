@@ -325,7 +325,6 @@ def db_create():
             raise KeyError("dock param {} doesn't exists. ".format(overlap_param) \
                            + "available options are: {}".format(', '.join(config.overlap_pm.keys())))
 
-        overlap_param = config.overlap_pm[overlap_param]
         crystal_idx = FLAGS.crystal_idx
         crystal_folder = db.get_folder(crystal_idx)
         docked_idx = FLAGS.docked_idx
@@ -339,8 +338,9 @@ def db_create():
             'docked_idx': docked_idx,
             'input_docked_folder':'{}_{}'.format(docked_idx, docked_folder),
             'depend':[crystal_idx, docked_idx],
+            'overlap_param':config.overlap_pm[overlap_param]
         }
-        table_param.update(overlap_param)
+        #table_param.update(overlap_param)
         
 
 

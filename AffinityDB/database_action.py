@@ -49,13 +49,32 @@ def download(table_idx, param, input_data):                                     
 
 
 def split_ligand(table_idx, param, input_data):
+    '''
+    Splite ligand form PDB file
+    
+    Parse PDB header, ligand records under key 'chemicals', get the 
+    
+    
+    Args:
+        table_idx: id for split ligand table 
+        param: dict
+            {
+                'output_folder':'...',
+                'input_download_folder':'...',
+            }
+        input_data: 
+            [str], (str) or str
+            
+    Returns:
+
+    '''
     try:
         if type(input_data).__name__ in ['tuple', 'list']:
             input_data = input_data[0]                                                                                            # do not allow x = x[0]
         
         receptor = input_data
 
-        fit_box_size = param['fit_box_size']
+        #fit_box_size = param['fit_box_size']
 
         output_folder = param['output_folder']                                                                                        # which folder ? output_folder
         output_folder = '{}_{}'.format(table_idx, output_folder)                                                                       # all table_sn become table_idx
@@ -84,14 +103,11 @@ def split_ligand(table_idx, param, input_data):
                 heavy_atom = heavy_lig.numAtoms()
                 heavy_coord =heavy_lig.getCoords()
                 max_size_on_axis = max(heavy_coord.max(axis=0) - heavy_coord.min(axis=0))
-                
-
 
                 lig_name = '_'.join([receptor,chain,resnum,resname,'ligand']) + '.pdb'
                 prody.writePDB(os.path.join(output_lig_dir, lig_name), lig)
 
-
-                record = [receptor, chain, resnum, resname, resid,heavy_atom, max_size_on_axis, 1, 'success']                                     # data = success_message
+                record = [receptor, chain, resnum, resname, resid, heavy_atom, max_size_on_axis, 1, 'success']                                     # data = success_message
                 records = [record]
                 db.insert(table_idx, records)
             except Exception as e:
@@ -197,6 +213,39 @@ def reorder(table_idx, param, input_data):
         db.insert(table_idx, records)
 
 def smina_dock(table_idx, param, input_data):
+    '''
+    Use smina to docking lignad, 
+    ligand can be identified by input_data, take the ligand and receptor
+    from input_ligand_folder and input_receptor_folder
+    docking result will be saved to ouptut_folder
+    
+    Docking parameter will be parsed from smina_param
+    
+    Args:
+        table_idx: id for dock table
+        param: dict
+            {
+                'output_folder': '...',
+                'input_lignad_folder':'...',
+                'input_receptor_folder':'...',
+                'smina_param':
+                    {
+                        'args': [],
+                        'kwargs' : {
+                            'autobox_add':12,
+                            'num_modes':400,
+                            'exhaustiveness':64,
+                            'scoring':'vinardo',
+                            'cpu':1
+                    },
+                ...
+            }
+        input_data: list
+                    [receptor, chain, resnum, resname]
+
+    Returns:
+
+    '''
     try:
         receptor, chain, resnum, resname = input_data
         
@@ -243,13 +292,39 @@ def smina_dock(table_idx, param, input_data):
         records = [record]
         db.insert(table_idx, records)
 
-def overlap(table_idx, param, input_data):                                                                                    # a prticularly bad datum
+def overlap(table_idx, param, input_data):
+    '''
+    Calculate overlap ratio and insert the result into database
+    
+    The overlap ratio meansure how many atoms from ligand_A are
+    close to the atoms from ligand_B
+    
+    Args:
+        table_idx:  id for overlap table
+        param: dict
+            {
+                'input_docked_folder':'...',
+                'input_crystal_folder':'...',
+                'overlap_param':
+                    {
+                        'clash_cutoff_A':'...'
+                        'clash_size_cutoff':'...'
+                    }
+                ...
+            }
+        input_data: list  
+                    [receptor, chain, resnum ,resname] 
 
+    Returns:
+
+    '''
     try:
         receptor, chain, resnum, resname = input_data
         input_docked_folder = param['input_docked_folder']
         input_crystal_folder = param['input_crystal_folder']
-        clash_cutoff_A = param['clash_cutoff_A']                                                                        #
+        overlap_pm = param['overlap_param']
+        clash_cutoff_A = overlap_pm['clash_cutoff_A']
+        clash_size_cutoff = overlap_pm['clash_size_cutoff']
         #clash_size_cutoff                                                                                              # make sure we compute a real number
 
 
@@ -286,7 +361,24 @@ def overlap(table_idx, param, input_data):                                      
         db.insert(table_idx, records)                                                                                       # failure mssg
 
 def rmsd(table_idx, param, input_data):
-    
+    '''
+        Calculate rmsd and insert the result into database
+        
+        
+        Args:
+            table_idx: int, id for native contact table
+            param: dict, parameters
+                    {
+                        'input_docked_foler':'...',
+                        'input_crystal_folder':'...',
+                    }
+            input_data: list  
+                    [receptor, chain, resnum ,resname] 
+
+        Returns:
+
+    '''
+
     try:
         receptor, chain, resnum, resname = input_data
         input_docked_folder = param['input_docked_folder']
@@ -315,7 +407,23 @@ def rmsd(table_idx, param, input_data):
         db.insert(table_idx, records)
 
 def native_contact(table_idx, param, input_data):
+    '''
+    Calculate native contact and insert the result into database
+    Args:
+        table_idx: int, id for native contact table
+        param: dict, parameters
+                {
+                    'input_docked_foler':'...',
+                    'input_crystal_folder':'...',
+                    'input_receptor_folder':'...',
+                    'distance_threshold':'...',
+                }
+        input_data: list  
+                [receptor, chain, resnum ,resname] 
 
+    Returns:
+
+    '''
     try:
         receptor, chain, resnum, resname = input_data
         input_docked_folder = param['input_docked_folder']
@@ -374,7 +482,22 @@ def native_contact(table_idx, param, input_data):
         db.insert(table_idx, records)
 
 def binding_affinity(table_idx, param, input_data):
-    
+    '''
+    Parse binding affintiy from the bindingdb, bindmoad or pdbbind.
+    Args:
+        table_idx: int
+        param: dict
+                {
+                    'bind_param':{
+                        'index':'...',
+                        'parse_func':'...'
+                }
+                
+        input_data: None
+
+    Returns: None
+
+    '''
     try:
         bind_param = param['bind_param']
         bind_index = bind_param['index']
@@ -392,9 +515,26 @@ def binding_affinity(table_idx, param, input_data):
         print (e)
 
 def exclusion(table_idx, param, input_data):
+    '''
+    Parse exclude ligand and record them into database
+    Args:
+        table_idx: int 
+        param: dict
+                {
+                    'ex_param':{
+                        'index':'...'
+                    },    
+                    ...
+                }
+                
+        input_data: None
 
+    Returns: None
+
+    '''
     try:
-        exclusion_index = param['index']
+        ex_param = param['ex_param']
+        exclusion_index = ex_param['index']
 
         with open(exclusion_index) as fin:
             exclusion_receptor = [x.strip().split('/')[-1].upper() for x in fin.readlines()]
@@ -415,5 +555,6 @@ DatabaseAction={
     'overlap':overlap,
     'rmsd':rmsd,
     'native_contact':native_contact,
-    'binding_affinity':binding_affinity
+    'binding_affinity':binding_affinity,
+    'exclusion':exclusion
 }

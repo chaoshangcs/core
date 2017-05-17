@@ -37,6 +37,18 @@ def _byte_feature(value):
     return tf.train.Feature(byte_list=tf.train.BytesList(value=value))
 
 def save_with_format(filepath,labels,elements,multiframe_coords,d_format='tfr'):
+    '''
+    save the labels, elemetns and coords into as d_format file
+    Args:
+        filepath: path for the output file
+        labels:  [0] for receptor [affinity] for crystal ligand
+        elements: int64::list
+        multiframe_coords:  
+        d_format: output format ['tfr','pkl','av4']
+
+    Returns: None
+
+    '''
     labels = np.asarray(labels,dtype=np.float32)
     elements = np.asarray(elements,dtype=np.int32)
     multiframe_coords = np.asarray(multiframe_coords,dtype=np.float32)
@@ -86,6 +98,22 @@ def save_with_format(filepath,labels,elements,multiframe_coords,d_format='tfr'):
 
 
 def save_tfr_one(save_path, rec_labels, rec_elements, rec_coords, lig_labels, lig_elements, lig_coords):
+    '''
+    record receptor and ligand into one TFRecords
+    
+    Args:
+        save_path: path for output file
+        rec_labels: always [0] for receptor
+        rec_elements: int64::list
+        rec_coords:  numpy.array 
+        lig_labels:  numpy.array
+        lig_elements: numpy.array
+        lig_coords: numpy.array
+
+    Returns: None
+
+    '''
+
     rec_labels = np.asarray(rec_labels, dtype=np.float32)
     rec_elements = np.asarray(rec_elements, dtype=np.int32)
     rec_coords = np.asarray(rec_coords, dtype=np.float32)
@@ -139,7 +167,28 @@ def save_tfr_one(save_path, rec_labels, rec_elements, rec_coords, lig_labels, li
 
 
 def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affinity, d_format):
+    """
+    convert the receptor and ligand into given format
+    
+    
+    
+    in the database position is start with 1
+    but when select coordinates be care that python list start with 0
+    so we need np.asarray(position).sort()-1 to make it work
+    Args:
+        base_dir: directory for output file
+        rec_path: path for receptor
+        lig_path: path for ligand
+        doc_path: path for docked ligand
+        position: list of position for docked liangd, start with 1
+        affinity: affinity value ( log affinity or norm faffinity
+        d_format: output format [ pdb, pkl, av4, tfr, tfr_one ]
 
+    Returns: (save_rec_path, save_lig_path) path of the output file
+             (None, None) when failed to parse PDB file
+             (save_path, None) when output format is tfr_one
+
+    """
    
     dest_dir = os.path.join(base_dir,d_format, _receptor(rec_path))
     if not os.path.exists(dest_dir):
@@ -156,11 +205,11 @@ def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affi
     if len(position):
         # docked list not empty
         prody_docked = prody.parsePDB(doc_path)
-        docked_elem = prody_docked.getElemens()
+        docked_elem = prody_docked.getElements()
 
         assert all(np.asarray(docked_elem) == np.asarray(ligand_elem))
 
-        docked_coords = prody_docked.getCoordsets()[position]
+        docked_coords = prody_docked.getCoordsets()[np.asarray(position).sort() -1]
         for docked_coord in docked_coords:
             ligand_coords = np.dstack((ligand_coords, docked_coord))
             labels = np.concatenate((labels, [1.]))
@@ -175,6 +224,31 @@ def convert_and_save_data(base_dir, rec_path, lig_path, doc_path, position, affi
         
     except:
         return None, None
+
+    if d_format == 'pdb':
+        save_rec_name= os.path.basename(rec_path)
+        save_rec_path = os.path.join(dest_dir, save_rec_name)
+        #os.system('cp {} {}'.format(rec_path, save_rec_path))
+
+        save_lig_name = os.path.basename(lig_path)
+        save_lig_path = os.path.join(dest_dir, save_lig_name)
+        if len(position):
+            try:
+                lig = prody.parsePDB(lig_path)
+                doc = prody.parsePDB(doc_path)
+                lig.addCoordset(doc.getCoordsets()[np.asarray(position).sort()-1])
+            except Exception as e:
+                print e
+                exit(1)
+
+            prody.writePDB(save_lig_path, lig)
+        else:
+            os.system('cp {} {}'.format(lig_path, save_lig_path))
+        os.system('cp {} {}'.format(rec_path, save_rec_path))
+
+        return save_rec_path, save_lig_path
+
+
 
     if d_format == 'tfr_one':
         save_name = os.path.basename(rec_path).replace('_receptor.pdb','.tfr')
@@ -234,32 +308,46 @@ class table(pd.DataFrame):
         return cls(dataframe)
 
     def __and__(self, other):
-        new = self
-        new = new.merge(other).drop_duplicates().dropna()
-        return self.wrap(new)
+        if len(self) == 0:
+            return self
+        elif len(other) == 0:
+            return other
+        else:
+            new = self
+            new = new.merge(other).drop_duplicates().dropna()
+            return self.wrap(new)
 
     def __or__(self, other):
-        new = self
-        new = new.merge(other, how='outer').drop_duplicates().dropna()
-        return self.wrap(new)
+        if len(self) == 0:
+            return other
+        elif len(other) == 0:
+            return self
+        else:
+            new = self
+            new = new.merge(other, how='outer').drop_duplicates().dropna()
+            return self.wrap(new)
 
     def __sub__(self, other):
-        
-        new = self
-        s = set(map(tuple, list(new.values)))
-        o = set(map(tuple, list(other.values)))
 
-        diff = s - ofilepathfilepath
+        new = self
+        intersec = new & other
+        #union = new | other
+
+        i = set(map(tuple, list(intersec.values)))
+        u = set(map(tuple, list(new.values)))
+
+        diff = u - i
         columns = self.columns
 
         if len(diff):
-            new = self.wrap(table(list(diff), columns=columns))
+            new = self.wrap(pd.DataFrame(list(diff), columns=columns))
         else:
             new = self.wrap(pd.DataFrame())
 
         return new
 
 class retrive_data(object):
+    export_fmt = ['pdb','pkl','av4','tfr', 'tfr_one']
 
     def __init__(self):
         
@@ -290,8 +378,21 @@ class retrive_data(object):
         # it will be the label for the ligand
         self.affinity_key = None
 
-    def __and__(self, other):
+        # table for ligand that is invalid
+        # columns = ['resname']
+        self.exclude = table(pd.DataFrame())
 
+    def __and__(self, other):
+        '''
+        and operation between two retive_data obj
+        new = self & other
+        
+        Args:
+            other: retrive_data obj
+
+        Returns: retrive_data 
+
+        '''
         assert self.receptor_folder == other.receptor_folder
         assert self.ligand_folder == other.ligand_folder 
         assert self.docked_folder == other.docked_folder \
@@ -311,14 +412,28 @@ class retrive_data(object):
             new.position = other.position
         elif other.position is not None:
             new.position = new.position & other.position 
-        
+
+        if new.exclude is None:
+            new.exclude = other.exclude
+        elif other.exclude is not None:
+            new.exclude = new.exclude | other.exclude
+
         if new.docked_folder is None:
             new.docked_folder = other.docked_folder
 
         return new 
 
     def __or__(self, other):
+        '''
+        or operation between data_retrive obj
+        new = self | other
         
+        Args:
+            other: data_retrive obj
+
+        Returns: data_retrive obj
+
+        '''
         assert self.receptor_folder == other.receptor_folder
         assert self.ligand_folder == other.ligand_folder
         assert self.docked_folder == other.docked_folder \
@@ -337,7 +452,12 @@ class retrive_data(object):
         if new.position is None:
             new.position = other.position
         elif other.position is not None:
-            new.position = new.position | other.position 
+            new.position = new.position | other.position
+
+        if new.exclude is None:
+            new.exclude = other.exclude
+        elif other.exclude is not None:
+            new.exclude = new.exclude | other.exclude
         
         if new.docked_folder is None:
             new.docked_folder = other.docked_folder
@@ -346,7 +466,12 @@ class retrive_data(object):
       
 
     def same(self):
+        '''
+        Greate and return a new object with same attribute
         
+        Returns: retrive_data object
+
+        '''
         new = retrive_data()
         new.receptor_folder = self.receptor_folder
         new.ligand_folder = self.ligand_folder
@@ -354,12 +479,22 @@ class retrive_data(object):
         new.ligand = self.ligand
         new.position = self.position
         new.affinity_key = self.affinity_key
+        new.exclude = self.exclude
 
         return new
 
 
     def receptor(self, receptor_idx):
-        # load available receptor from table with idx: receptor_idx
+        '''
+        load available receptor from table with idx: receptor_idx
+        set receptor_folder
+        
+        Args:
+            receptor_idx: 
+
+        Returns:
+
+        '''
 
         _, _, df = db.get_success_data(receptor_idx, dataframe=True)
         primary_key = db.primary_key_for(receptor_idx)
@@ -368,16 +503,24 @@ class retrive_data(object):
         if self.ligand is None:
             self.ligand  = df 
         else:
-            self.ligand = self.ligand and df
+            self.ligand = self.ligand & df
 
         folder_name = db.get_folder(receptor_idx)
         self.receptor_folder = '{}_{}'.format(receptor_idx, folder_name)
         
         return self
 
-
     def crystal(self, crystal_idx):
-        # load available ligand from table with idx: crystal_idx
+        '''
+        load available ligand from table with idx: crystal_idx
+        set ligand_folder
+        
+        Args:
+            crystal_idx: int 
+
+        Returns: self
+
+        '''
 
         _, _, df  = db.get_success_data(crystal_idx, dataframe=True)
         primary_key = db.primary_key_for(crystal_idx)
@@ -394,8 +537,39 @@ class retrive_data(object):
 
         return self
 
+    def exclusion(self, ex_idx):
+        '''
+        load the ligand that should be exclude from table with idx: ex_idx
+        Args:
+            ex_idx: int
+
+        Returns: self
+
+        '''
+
+        _, _, df = db.get_success_data(ex_idx, dataframe=True)
+        primary_key = db.primary_key_for(ex_idx)
+        df = df[primary_key]
+        df = table(df)
+
+        if self.exclude is None:
+            self.exclude = df
+        else:
+            self.exclude = self.exclude | df
+
+        return self
+
     def docked(self, docked_idx):
-        # load available docked ligand from table with idx: docked_idx
+        '''
+        load available docked ligand from table with idx: docked_idx
+        set docked_folder
+    
+        Args:
+            docked_idx: int
+
+        Returns: self
+
+        '''
 
         _, _, df = db.get_success_data(docked_idx, dataframe=True)
         primary_key = db.primary_key_for(docked_idx)
@@ -413,13 +587,23 @@ class retrive_data(object):
         return self
 
     def overlap(self, overlap_idx, rest):
+        '''
         # select position with overlap value in restriction: rest
-        # e.g. rest=[0.1,0.5] overlap ratio between 0.1 and 0.5
+        # e.g. rest=[0.1,0.5] overlap ratio : 0.1 <= value <= 0.5
+        Args:
+            overlap_idx: int index for overlap table
+            rest: typle: (a,b) , restriction a < value < b 
+                  list: [a,b] , restriction a <= value <= b
+                  None: no restriction
+
+        Returns: self
+
+        '''
 
         _, _, df = db.get_success_data(overlap_idx, dataframe=True)
         primary_key = db.primary_key_for(overlap_idx)
-        df = df[primary_key]
-        df = table(df).apply_rest('overlap',rest)
+        df = df[primary_key+['overlap_ratio']]
+        df = table(df).apply_rest('overlap_ratio',rest)
 
         if self.position is None:
             self.position = df 
@@ -429,10 +613,21 @@ class retrive_data(object):
         return self
 
     def rmsd(self, rmsd_idx, rest):
-        # select position with rmsd value in restriction: rest
-        # e.g. rest=[None, 2] rmsd ration between minimum and 2
+        '''
+        select position with rmsd value in restriction: rest
+        e.g. rest=[None, 2] rmsd ration : minimum <= value <= 2
         
-        _, _, df = db.get_success_data(crystal_idx, dataframe=True)
+        Args:
+            rmsd_idx: 
+            rest: typle: (a,b) , restriction a < value < b 
+                  list: [a,b] , restriction a <= value <= b
+                  None: no restriction
+
+        Returns: self
+
+        '''
+        
+        _, _, df = db.get_success_data(rmsd_idx, dataframe=True)
         primary_key = db.primary_key_for(rmsd_idx)
         df= df[primary_key + ['rmsd']]
         df = table(df).apply_rest('rmsd',rest)
@@ -445,8 +640,19 @@ class retrive_data(object):
         return self
 
     def native_contact(self, native_contact_idx, rest):
-        # select position with native contact ration in restriction: rest
-        # e.g. rest=None  no restriction on native contact
+        '''
+        select position with native contact ration in restriction: rest
+        e.g. rest=None  no restriction on native contact
+        Args:
+            native_contact_idx:  int
+            rest: typle: (a,b) , restriction a < value < b 
+                  list: [a,b] , restriction a <= value <= b
+                  None: no restriction
+
+
+        Returns:
+
+        '''
 
 
         _, _, df = db.get_success_data(native_contact_idx, dataframe=True)
@@ -462,7 +668,17 @@ class retrive_data(object):
         return self
 
     def norm_affinity(self, affinity_idx, rest):
-        # select available ligand with norm affinity value in restriction: rest
+        '''
+        select available ligand with norm affinity value in restriction: rest
+        Args:
+            affinity_idx: int
+            rest: typle: (a,b) , restriction a < value < b 
+                  list: [a,b] , restriction a <= value <= b
+                  None: no restriction
+
+        Returns:
+
+        '''
         
         self.affinity_key = 'norm_affinity'
         _, _, df = db.get_success_data(affinity_idx, dataframe=True)
@@ -478,7 +694,17 @@ class retrive_data(object):
         return self
 
     def log_affinity(self, affinity_idx, rest):
-        # select available receptor with log affinity value in restriction: rest
+        '''
+        select available receptor with log affinity value in restriction: rest
+        Args:
+            affinity_idx: int
+            rest: typle: (a,b) , restriction a < value < b 
+                  list: [a,b] , restriction a <= value <= b
+                  None: no restriction
+
+        Returns:
+
+        '''
 
         self.affinity_key = 'log_affinity'
         _, _, df = db.get_success_data(affinity_idx, dataframe=True)
@@ -494,26 +720,41 @@ class retrive_data(object):
         return self
 
     def export_table(self):
+        '''
+        export the retrive result as a dataframe table
+        Returns: table
+
+        '''
         if self.position is None:
-            return self.ligand
+            return self.ligand - self.exclude
         else:
-            return self.ligand and self.position
+            return self.ligand & self.position - self.exclude
 
     def export_data_to(self, folder_name, d_format):
-        # export data to the folder : folder_name
-        # export data format
-        #   'pkl': python pikle
-        #   'av4': affinity build-in binary format
-        #   'tfr': tensorflow record format
+        '''
+        retrive data to the folder named by [folder_name] and convert them to [d_format]
+           
+        Args:
+            folder_name: the data to export the folder
+            d_format: str
+                'pkl': python pikle
+                'av4': affinity build-in binary format
+                'tfr': tensorflow record format
+                'pdb': save format as input
+                'tfr_one': save ligand and receptor in one TFRecord
+
+        Returns: None
+
+        '''
         
-        if not d_format in ['pkl','av4','tfr', 'tfr_one']:
+        if not d_format in self.export_fmt:
             raise Exception("Unexpected format {}, available format: {}".\
-                                format(d_format, ['pkl','av4','tfr']))
+                                format(d_format, self.export_fmt))
         
         export_dir = os.path.join(config.export_dir, folder_name)
         
         if self.position is None:
-            valid = self.ligand 
+            valid = self.ligand - self.exclude
         
             collection = []
             for i in range(len(valid)):
@@ -545,10 +786,10 @@ class retrive_data(object):
             
         
         else:
-            valid = self.ligand and self.position     
+            valid = self.ligand & self.position - self.exclude
             collection =[]
             
-            for keys, group in valid.groupby(['receptor','chain','resnum','resname', aff_key]):
+            for keys, group in valid.groupby(['receptor','chain','resnum','resname', self.affinity_key]):
                 receptor = keys[0]
                 file = '_'.join(keys[:4])
 
@@ -609,21 +850,53 @@ class retrive_data(object):
 
 
 def example1():
-    
-    ra = retrive_data() # output's filder name
-    ra.receptor(2) # splited receptor table sn
-    ra.crystal(3) # splited ligand table sn
-    ra.log_affinity(4, None) # affinity table idx , [minimum, maximum]
-    
-    ra.export_data_to('test_tfr_one','tfr') # convert file into av4 format
+    '''
+    simple example for retrive data
+
+    '''
+
+    # create retrive_data class
+    ra = retrive_data()
+
+    # get the info for receptor from table: 2
+    ra.receptor(2)
+
+    # get the info for ligand from table: 3
+    ra.crystal(3)
+
+    # get the info for affinity from table: 4
+    ra.log_affinity(4, None)
+
+    # export the data to the folder named 'test_tfr_one' as TFRecord
+    ra.export_data_to('test_tfr_one','tfr')
     
     #table = ra.export_table()
 
 def example2():
+    '''
+    example to show how to combine result coming from diffrernt way
+    '''
 
-    rb = retrive_data().recpeotr(2).crystal(3).norm_affinity(4,None)
-    rc = rb.same().overlap(5,[None,0.5])
-    rd = rb.same().overlap(5,(0.5,None)).rmsd(6,[None,2])
+    # create retrive_data object
+    r  = retrive_data()
+
+    # set the table to get ligand
+    # receptor from table:2
+    # reordered ligand from table:3
+    # docked ligand from table:4
+    # affinity information from table:5
+    # select the record which have norm affinity value
+    rb = r.recpeotr(2).crystal(3).docked(4).norm_affinity(5,None)
+
+    # overlap info from table 6
+    # select the position with overlap ratio value <= 0.5
+    rc = rb.same().overlap(6,[None,0.5])
+
+    # overlap info from table 6 rmsd info from table 7
+    # select teh position with overlap ratio value > 0.5 and rmas value <= 2
+    rd = rb.same().overlap(6,(0.5,None)).rmsd(7,[None,2])
+
+    #
     re = rc | rd 
     table = re.export_table()
 

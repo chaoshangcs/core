@@ -16,7 +16,7 @@ Parameter
 db_name='affinity.db'
 
 # number of process running at the same time
-process_num = 8
+process_num = 1
 
 
 # RENAMES:
@@ -94,7 +94,7 @@ Folders
 script_path = sys.path[0]
 #base folder for all the output
 #database_root = os.path.join(script_path, '..', 'AffinityDB')
-database_root = '/home/xander/affinityDB/aff_test_v3'
+database_root = '/Users/xander/Projects/AffDB/test'
 
 
 db_path =os.path.join(database_root, db_name)
@@ -109,11 +109,11 @@ File Path
 
 # path of smina binary file
 #smina = 'smina.static'
-smina = '/home/xander/Program/smina/smina.static'
+smina = '/Users/xander/Projects/AffDB/smina.osx'
 
 # pdb_target_list
 #list_of_PDBs_to_download = os.path.join(sys.path[0],'target_list','main_pdb_target_list.txt')
-list_of_PDBs_to_download = '/home/xander/affinityDB/aff_test/affinity_test.txt'
+list_of_PDBs_to_download = '/Users/xander/Projects/AffDB/valid_list.txt'
 #list_of_PDBs_to_download = os.path.join(sys.path[0], 'pdb_list','pdb_list.txt')
 
 

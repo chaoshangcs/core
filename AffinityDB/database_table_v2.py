@@ -175,7 +175,7 @@ tables = {
                             ('state','integer'),
                             ('comment','text')
                         ]
-                    )
+                    ),
                     ['resname']])
     
 
