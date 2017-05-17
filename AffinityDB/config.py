@@ -94,7 +94,7 @@ Folders
 script_path = sys.path[0]
 #base folder for all the output
 #database_root = os.path.join(script_path, '..', 'AffinityDB')
-database_root = '/Users/xander/Projects/AffDB/test'
+database_root = '/Users/xander/Projects/AffDB/test_1'
 
 
 db_path =os.path.join(database_root, db_name)
@@ -173,6 +173,10 @@ bind_pm = {
     'bindmoad':{
         'index':os.path.join(sys.path[0],'bind_index','every.csv'),
         'parse_func':'bindmoad'
+    },
+    'bindingdb':{
+        'index':os.path.join(sys.path[0],'bind_index','binding.tsv'),
+        'parse_func':'bindingdb'
     }
 }
 

@@ -9,7 +9,7 @@ Install using `pip install -r requirements.txt`
 - `database_root` : dir to store the generated data of AffinityDB
 - `smina` : path of (smina)[https://sourceforge.net/projects/smina/] executable file
 - `list_of_PDBs_to_download` : path of txt file, the PDB is is written in one line and split by ', '
-
+- `bindb_pm` : index is the path for the binding affinity record
 ## Operation
 
 ### create
@@ -42,6 +42,18 @@ Delete all the relative data for a task. Including the table and folder for this
 ```shell
 # [int] is an unique sn number for a task
 python database_create_v2.py --continue --table_sn=[int]
+```
+
+### progress
+
+Monitor the statue of the job by idx.
+
+```shell
+# Statue of one table by table_idx
+python databser_create_v2.py --progress --tabie_idx=[idx]
+
+# Statue of all table
+python database_create_v2.py --progress --table_idx=0
 ```
 
 ## Args
@@ -88,11 +100,16 @@ python database_create_v2.py --create --action=smina_dock --folder_name=vinardo 
 python database_create_v2.py --create --action=rmsd --crystal_idx=4 --docked_idx=5
 
 # calculate overlap
-python database_create_v2.py --create --action=overlap --crystal_idx=4 --docked_idx=5
+python database_create_v2.py --create --action=overlap --crystal_idx=4 --docked_idx=5 --param=default
 
 # calculate native_contact
-python database_create_v2.py --create --action=native_contact --receptor_idx=2 --crystal_idx=4 --docked_idx=5
+python database_create_v2.py --create --action=native_contact --receptor_idx=2 --crystal_idx=4 --docked_idx=5 --param=default
+
+# load binidng affinity info
+python database_create_v2.py --create --action=binding_affinity  --param=pdbbind
+
 ```
+
 
 ## Get av4
 
@@ -118,6 +135,4 @@ python database_create_v2.py --create --action=split_ligand --folder_name=splite
 # parse binding affinity
 python database_create_v2.py --create --binding_affinity --param=pdbbind
 
-# retrive av4 file
-python retrive_v2.py
 ```
