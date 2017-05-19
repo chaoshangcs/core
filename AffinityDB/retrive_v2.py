@@ -841,7 +841,7 @@ class retrive_data(object):
                                                      d_format)
             if rec_path is None:
                 continue
-            index.append([rec_path, lig_path, affinity])
+            index.append([rec_path, lig_path, aff])
 
         df = pd.DataFrame(index, columns=['receptor','ligand','affinity'])
         df.to_csv(os.path.join(export_table_dir,'index.csv'), index=False)
