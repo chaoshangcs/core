@@ -31,16 +31,16 @@ def train():
     keep_prob = tf.placeholder(tf.float32)
     logits = ag_net_2(image_batch,keep_prob,FLAGS.batch_size)
 
-    # try square cost (does not work for rotation or translation)
+    # try square cost
     # norm_labels = ((lig_xyz_rot_shift[:, 0]) + 2) / 4  # /4) +0.5 #/ (np.pi*2)) +0.5
     # norm_preds = tf.nn.softmax(logits)[:,:,1]
     # variance_penalty = ((-3 * norm_preds**2) + (3*norm_preds) - 1.0) /3.0
     # cost = tf.reduce_sum(tf.reduce_sum(((norm_labels - norm_preds)**2 + variance_penalty), reduction_indices=1))
 
     # try softmax cross entropy over three classes
-    raw_labels = xyz_label[:,0]
+    raw_labels = xyz_label[:,3]
     epsilon = 0.001
-    norm_labels = tf.cast(raw_labels/10+epsilon,tf.int32)
+    norm_labels = tf.cast(raw_labels/np.pi+epsilon,tf.int32)
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=norm_labels,logits=logits)
     cross_entropy_mean = tf.reduce_mean(cross_entropy)
 
@@ -100,7 +100,7 @@ def train():
         my_raw_label,my_norm_label,my_n_ligand_atoms,my_n_receptor_atoms,my_logit,my_cost = \
             sess.run([raw_label, norm_label,num_ligand_atoms,num_receptor_atoms,logit,cost], feed_dict={keep_prob:0.5})
 
-        if (batch_num % 10 == 9):
+        if (batch_num % 20 == 19):
             print "l atoms:", my_n_ligand_atoms,
             print "p atoms:", my_n_receptor_atoms,
             print "raw labels:",my_raw_label,

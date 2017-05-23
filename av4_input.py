@@ -156,8 +156,8 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
 
     # move receptor randomly
     label_transition_matrices, xyz_labels = gen_deep_affine_tform_with_labels(affine_transform_pool_size,
-                                                                              x_shift_range=10,
-                                                                              shift_partitions=1,
+                                                                              x_rot_range=tf.convert_to_tensor(np.pi),
+                                                                              rot_partitions=1,
                                                                               abs=True)
 
     # rec_transition_matrices = tf.Variable(affine_initializer)
