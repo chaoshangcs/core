@@ -79,6 +79,7 @@ def train():
     raw_label = raw_labels[0]
     norm_label = norm_labels[0]
     logit = logits[0]
+    norm_pred = norm_preds[0]
     cost = square_cost[0]
 
     # launch all threads only after the graph is complete and all the variables initialized
@@ -99,15 +100,17 @@ def train():
         print "epoch:",epo[0],"step:", batch_num,
         print "\tcost:","%.2f" % np.average(my_cost),
 
-        my_raw_label,my_norm_label,my_n_ligand_atoms,my_n_receptor_atoms,my_logit,my_cost = \
-            sess.run([raw_label, norm_label,num_ligand_atoms,num_receptor_atoms,logit,cost], feed_dict={keep_prob:0.5})
+        my_raw_label,my_norm_label,my_n_ligand_atoms,my_n_receptor_atoms,my_logit,my_norm_pred,my_cost = \
+            sess.run([raw_label, norm_label,num_ligand_atoms,num_receptor_atoms,logit,norm_pred,cost],
+                     feed_dict={keep_prob:0.5})
 
-        if (batch_num % 500 == 499):
-            print "l atoms:", my_n_ligand_atoms,
-            print "p atoms:", my_n_receptor_atoms,
+        if (batch_num % 20 == 19):
+            print "lig atoms:", my_n_ligand_atoms,
+            print "rec atoms:", my_n_receptor_atoms,
             print "raw labels:",my_raw_label,
             print "norm label:",my_norm_label,
-            print "raw prediction:",my_logit
+            print "raw pred:",my_logit
+            print "norm pred:",my_norm_pred,
             print "cost:",my_cost
 
         print "\texps:", "%.2f" % (FLAGS.batch_size / (time.time() - start))
