@@ -157,6 +157,8 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
     # move receptor randomly
     label_transition_matrices, xyz_labels = gen_deep_affine_tform_with_labels(affine_transform_pool_size,
                                                                               x_rot_range=tf.convert_to_tensor(np.pi),
+                                                                              y_rot_range=tf.convert_to_tensor(np.pi),
+                                                                              z_rot_range=tf.convert_to_tensor(np.pi),
                                                                               rot_partitions=1,
                                                                               abs=True)
 
@@ -181,7 +183,7 @@ def convert_protein_and_ligand_to_image(ligand_elements,ligand_coords,receptor_e
     cropped_receptor_elements = tf.boolean_mask(receptor_elements,retain_atoms)
 
     # merge protein and ligand together. In this case an arbitrary value of 10 is added to the ligand
-    lig_coords_d = tf.concat([ceiled_ligand_coords,tf.expand_dims(tf.ones([tf.shape(ceiled_ligand_coords)[0]],
+    lig_coords_d = tf.concat([ceiled_ligand_coords,tf.expand_dims(tf.zeros([tf.shape(ceiled_ligand_coords)[0]],
                                                                           dtype=tf.int64),1)],1)
     rec_coords_d = tf.concat([cropped_receptor_coords,tf.expand_dims(tf.ones([tf.shape(cropped_receptor_coords)[0]],
                                                                              dtype=tf.int64),1)],1)

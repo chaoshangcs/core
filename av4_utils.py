@@ -227,7 +227,7 @@ def gen_deep_affine_tform_with_labels(num_frames, x_shift_range=0,
     elif rot_partitions is not None and abs:
         x_rot = tf.to_float(tf.random_uniform([num_frames], minval=0, maxval=rot_partitions+1, dtype=tf.int32)) * (x_rot_range / rot_partitions)
         y_rot = tf.to_float(tf.random_uniform([num_frames], minval=0, maxval=rot_partitions+1, dtype=tf.int32)) * (y_rot_range / rot_partitions)
-        z_rot = tf.to_float(tf.random_uniform([num_frames], minval=0, maxval=rot_partitions+1, dtype=tf.float32)) * (z_rot_range / rot_partitions)
+        z_rot = tf.to_float(tf.random_uniform([num_frames], minval=0, maxval=rot_partitions+1, dtype=tf.int32)) * (z_rot_range / rot_partitions)
     else:
         raise ValueError("combination of rot partitions and abs is not in a list of allowed values")
 

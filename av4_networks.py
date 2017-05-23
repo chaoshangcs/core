@@ -761,6 +761,55 @@ def ag_net_2(x_image_batch,keep_prob,batch_size):
     h_fc2 = fc_layer(layer_name="fc2", input_tensor=h_fc1_drop, output_dim=256)
     h_fc2_relu = relu_layer(layer_name="fc2_relu", input_tensor=h_fc2)
 
-    y_conv = fc_layer(layer_name="out_neuron", input_tensor=h_fc2_relu, output_dim=2)
+    y_conv = fc_layer(layer_name="out_neuron", input_tensor=h_fc2_relu, output_dim=6)
 
-    return y_conv#tf.reshape(y_conv,[batch_size,1,3])
+    return tf.reshape(y_conv,[batch_size,3,2])
+
+
+
+def ag_net_3(x_image_batch,keep_prob,batch_size):
+    "makes a simple network that can receive 20x20x20 input images. And output 2 classes"
+    with tf.name_scope('input'):
+        pass
+    with tf.name_scope("input_reshape"):
+        print "image batch dimensions", x_image_batch.get_shape()
+        # formally adding one depth dimension to the input
+        #x_image_batch = tf.reshape(x_image_batch, [batch_size, 20, 20, 20, 2])
+        print "input to the first layer dimensions", x_image_batch.get_shape()
+
+    h_conv1 = conv_layer(layer_name='conv1_5x5x5', input_tensor=x_image_batch, filter_size=[7, 7, 7, 2, 20])
+    h_relu1 = relu_layer(layer_name='relu1', input_tensor=h_conv1)
+    h_pool1 = pool_layer(layer_name='pool1_2x2x2', input_tensor=h_relu1, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1])
+
+    h_conv2 = conv_layer(layer_name="conv2_3x3x3", input_tensor=h_pool1, filter_size=[5, 5, 5, 20, 30])
+    h_relu2 = relu_layer(layer_name="relu2", input_tensor=h_conv2)
+    h_pool2 = pool_layer(layer_name="pool2_2x2x2", input_tensor=h_relu2, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1])
+
+    h_conv3 = conv_layer(layer_name="conv3_2x2x2", input_tensor=h_pool2, filter_size=[3, 3, 3, 30, 40])
+    h_relu3 = relu_layer(layer_name="relu3", input_tensor=h_conv3)
+    h_pool3 = pool_layer(layer_name="pool3_2x2x2", input_tensor=h_relu3, ksize=[1, 2, 2, 2, 1], strides=[1, 1, 1, 1, 1])
+
+    h_conv4 = conv_layer(layer_name="conv4_2x2x2", input_tensor=h_pool3, filter_size=[3, 3, 3, 40, 50])
+    h_relu4 = relu_layer(layer_name="relu4", input_tensor=h_conv4)
+    h_pool4 = pool_layer(layer_name="pool4_2x2x2", input_tensor=h_relu4, ksize=[1, 2, 2, 2, 1], strides=[1, 1, 1, 1, 1])
+
+    h_conv5 = conv_layer(layer_name="conv5_2x2x2", input_tensor=h_pool4, filter_size=[2, 2, 2, 50, 60])
+    h_relu5 = relu_layer(layer_name="relu5", input_tensor=h_conv5)
+    h_pool5 = pool_layer(layer_name="pool5_2x2x2", input_tensor=h_relu5, ksize=[1, 2, 2, 2, 1], strides=[1, 1, 1, 1, 1])
+
+    with tf.name_scope("flatten_layer"):
+        h_pool2_flat = tf.reshape(h_pool5, [-1, 10 * 10 * 10 * 60])
+
+    h_fc1 = fc_layer(layer_name="fc1", input_tensor=h_pool2_flat, output_dim=1024)
+    h_fc1_relu = relu_layer(layer_name="fc1_relu", input_tensor=h_fc1)
+
+    with tf.name_scope("dropout"):
+        tf.summary.scalar('dropout_keep_probability', keep_prob)
+        h_fc1_drop = tf.nn.dropout(h_fc1_relu, keep_prob)
+
+    h_fc2 = fc_layer(layer_name="fc2", input_tensor=h_fc1_drop, output_dim=256)
+    h_fc2_relu = relu_layer(layer_name="fc2_relu", input_tensor=h_fc2)
+
+    y_conv = fc_layer(layer_name="out_neuron", input_tensor=h_fc2_relu, output_dim=6)
+
+    return tf.reshape(y_conv,[batch_size,3,2])
